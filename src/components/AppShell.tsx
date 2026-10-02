@@ -9,6 +9,7 @@ const links = [
   { href: "/", label: "Board" },
   { href: "/templates", label: "Templates" },
   { href: "/companies", label: "Companies" },
+  { href: "/chat", label: "Chat" },
 ]
 
 function isCurrent(href: string, path: string) {
@@ -18,7 +19,7 @@ function isCurrent(href: string, path: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname()
-  const { ready, companies, selectedCompanyId, setSelectedCompanyId } = useStore()
+  const { ready, error, companies, selectedCompanyId, setSelectedCompanyId } = useStore()
   const ordered = [...companies].sort((a, b) => a.name.localeCompare(b.name))
 
   return (
@@ -67,13 +68,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </label>
             <Link
               href="/companies/new"
+              aria-label="Add company"
               className="rounded-md px-2 py-1.5 text-sm text-white/80 hover:bg-white/10 hover:text-white"
             >
-              New
+              Add company
             </Link>
           </div>
         </div>
       </header>
+      {error ? <p className="shrink-0 bg-warn-soft px-4 py-2 text-sm text-warn">{error}</p> : null}
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
   )

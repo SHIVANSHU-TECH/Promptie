@@ -1,12 +1,25 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { createId, extractSlots, fillPrompt, groupTemplates, openSlots } from "@/lib/prompt"
-import { btnPrimary, field } from "@/lib/styles"
+import { btnGhost, btnPrimary, field } from "@/lib/styles"
 import { useStore } from "@/lib/store"
 import { PromptView } from "./PromptView"
 import { SlotEditor } from "./SlotEditor"
+
+async function writeClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const area = document.createElement("textarea")
+    area.value = text
+    document.body.appendChild(area)
+    area.select()
+    document.execCommand("copy")
+    area.remove()
+  }
+}
 
 export function Board() {
   const {
@@ -40,8 +53,8 @@ export function Board() {
       .includes(needle)
   })
   const groups = groupTemplates(visible)
-  const active = templates.find((template) => template.id === activeTemplateId) ?? visible[0] ?? null
-  const slots = useMemo(() => (active ? extractSlots(active.body) : []), [active])
+  const active = visible.find((template) => template.id === activeTemplateId) ?? visible[0] ?? null
+  const slots = active ? extractSlots(active.body) : []
   const missing = active ? openSlots(active.body, values) : []
   const filled = active ? fillPrompt(active.body, values) : ""
 
@@ -53,30 +66,19 @@ export function Board() {
 
   async function copyPrompt() {
     if (!filled) return
-    try {
-      await navigator.clipboard.writeText(filled)
-    } catch {
-      const area = document.createElement("textarea")
-      area.value = filled
-      document.body.appendChild(area)
-      area.select()
-      document.execCommand("copy")
-      area.remove()
-    }
+    await writeClipboard(filled)
     setCopied(true)
   }
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-        event.preventDefault()
-        void copyPrompt()
-      }
+      if (!(event.metaKey || event.ctrlKey) || event.key !== "Enter") return
+      if (!filled) return
+      event.preventDefault()
+      void writeClipboard(filled).then(() => setCopied(true))
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-    // copyPrompt closes over the latest filled prompt via render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filled])
 
   function onSlotChange(key: string, value: string) {
@@ -94,7 +96,9 @@ export function Board() {
   }
 
   if (!ready) {
-    return <div className="h-full bg-paper" />
+    return (
+      <div className="grid h-full place-items-center bg-paper text-sm text-muted">Loading the library from Firebase…</div>
+    )
   }
 
   return (
@@ -103,10 +107,15 @@ export function Board() {
         className={`${narrowDetail ? "hidden" : "flex"} w-full min-h-0 shrink-0 flex-col border-r border-line bg-rail lg:flex lg:w-80`}
       >
         <div className="border-b border-line p-4">
-          <h1 className="text-sm font-semibold">Prompts</h1>
-          <p className="mt-1 text-xs text-muted">
-            {company ? `Filled with ${company.name}` : "No company selected"}
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-sm font-semibold">Prompts</h1>
+              <p className="mt-1 text-xs text-muted">{company ? `Filled with ${company.name}` : "No company selected"}</p>
+            </div>
+            <Link href="/templates/new" className={`${btnGhost} px-2.5 py-1.5`}>
+              New
+            </Link>
+          </div>
           <input
             className={`${field} mt-3`}
             value={query}
@@ -201,12 +210,20 @@ export function Board() {
                         )}
                       </p>
                     </div>
-                    <Link
-                      href={`/templates/${active.id}`}
-                      className="text-sm text-accent underline decoration-accent/40 underline-offset-2"
-                    >
-                      Edit template
-                    </Link>
+                    <div className="flex gap-4">
+                      <Link
+                        href="/chat"
+                        className="text-sm text-accent underline decoration-accent/40 underline-offset-2"
+                      >
+                        Ask Groq
+                      </Link>
+                      <Link
+                        href={`/templates/${active.id}`}
+                        className="text-sm text-accent underline decoration-accent/40 underline-offset-2"
+                      >
+                        Edit template
+                      </Link>
+                    </div>
                   </div>
                   {active.description ? (
                     <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">{active.description}</p>
@@ -262,7 +279,7 @@ export function Board() {
           </>
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-sm text-muted">
-            {templates.length === 0 ? "Create a template to start." : "Choose a prompt."}
+            {templates.length === 0 ? "Create a template to start." : "No prompt matches that search."}
           </div>
         )}
       </section>

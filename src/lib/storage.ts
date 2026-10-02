@@ -72,7 +72,9 @@ export function loadDatabase(): Database {
 }
 
 export function saveDatabase(db: Database) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
+  const next = JSON.stringify(db)
+  if (window.localStorage.getItem(STORAGE_KEY) === next) return
+  window.localStorage.setItem(STORAGE_KEY, next)
 }
 
 function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {

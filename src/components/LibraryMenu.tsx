@@ -53,7 +53,7 @@ export function LibraryMenu() {
       </summary>
       <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-line bg-card p-3 text-ink shadow-none">
         <p className="text-sm leading-5 text-muted">
-          Templates and companies stay in this browser. Export a copy if you want a backup.
+          Templates and companies are stored in Firebase. Export a copy if you want a backup.
         </p>
         <div className="mt-3 flex gap-2">
           <button type="button" className={btnGhost} onClick={exportLibrary}>

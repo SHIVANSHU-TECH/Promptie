@@ -1,11 +1,13 @@
 import type { Template } from "./types"
 
-const SLOT = /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g
+function slotPattern() {
+  return /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g
+}
 
 export function extractSlots(body: string): string[] {
   const seen = new Set<string>()
   const order: string[] = []
-  for (const match of body.matchAll(SLOT)) {
+  for (const match of body.matchAll(slotPattern())) {
     const key = match[1]
     if (seen.has(key)) continue
     seen.add(key)
@@ -25,7 +27,7 @@ export type PromptPart =
 export function tokenize(body: string, values: Record<string, string>): PromptPart[] {
   const parts: PromptPart[] = []
   let last = 0
-  for (const match of body.matchAll(SLOT)) {
+  for (const match of body.matchAll(slotPattern())) {
     const index = match.index ?? 0
     if (index > last) {
       parts.push({ type: "text", text: body.slice(last, index) })
