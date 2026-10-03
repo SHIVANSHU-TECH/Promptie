@@ -55,9 +55,10 @@ export function FlowTest() {
         <p className="text-xs font-medium tracking-wide text-muted uppercase">Automation</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Flow testing</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Paste a Lovable or live store link. The run adds products, opens the cart and checkout, and fills random
-          details. Coupon GLOBAL100 is used only when Stripe is live. A Stripe test key places the order without that
-          coupon.
+          Paste a Lovable or live store link. The run follows the store path: two product pages, Add to Cart, the cart,
+          then checkout. It fills contact, shipping, HIPAA, and telehealth consent, and checks phone and desktop layout
+          on each of those pages plus the legal footer. Coupon GLOBAL100 is used only when Stripe is live. A Stripe test
+          key skips the coupon.
         </p>
         <form
           className="mt-6 flex flex-col gap-3 sm:flex-row"
