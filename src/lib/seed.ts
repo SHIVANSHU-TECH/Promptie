@@ -281,6 +281,142 @@ Before writing code, find the order payload builder and the page head. Then impl
 
 When done, list the changed files and how to test with a referral present and with the script blocked.`
 
+const pricingBody = `You are a senior engineer working inside {{project_name}} for the brand {{brand_name}}.
+
+Task: add a protected Admin Pricing Dashboard by copying the ShapeMeds architecture. Do not invent a second pricing system. Do not redesign the site. Do not change checkout, cart, Stripe, payment processing, product names, product ids, SKUs, checkout URLs, product mappings, intake, labs, marketing pages, header, or footer.
+
+Product context:
+{{product_summary}}
+
+Stack: {{stack}}
+
+Fixed server-side site id. Never read this from the browser and never swap in another brand's site id:
+{{site_id}}
+
+Admin sign-in. Store these only in server environment variables. Do not put them in client code or in a public env prefix.
+- Username: {{admin_username}}
+- Password: {{admin_password}}
+- Session secret: {{admin_session_secret}}
+
+Pricing API token. Server only. The browser must never see it and must never call panel.whitelabelmd.com itself:
+{{api_authtoken}}
+
+Follow the ShapeMeds split:
+- A server-only module owns the WhiteLabelMD calls. ShapeMeds uses src/lib/wlmd-prices.server.ts. The .server suffix, or this project's equivalent, keeps the token out of the client bundle.
+- Admin login, session, price read, and price update are server functions. ShapeMeds uses src/lib/admin.functions.ts with an httpOnly session, an 8 hour max age, and assertAdmin before every price read or update.
+- The public customer price read is a separate server function. ShapeMeds uses src/lib/prices.functions.ts. It returns checkout-id to product_price and never caches or invents a price.
+- Routes are /admin/login and /admin/prices. Unauthenticated visitors are redirected to login. Login is noindex.
+
+GET current prices. POST, not GET:
+https://panel.whitelabelmd.com/wlmdbackend/api/get_product_prices
+
+Headers, server-side only:
+authtoken: {{api_authtoken}}
+Accept: application/json
+content-type: application/x-www-form-urlencoded
+
+Body. product_id is one comma-separated string, never a JSON array. Build the id list from the existing {{brand_name}} catalog. Do not stop at a sample of three ids. ShapeMeds sends them in chunks of 150 with cache: no-store.
+site_id={{site_id}}
+product_id=2,5,6
+
+Success is status = 1. Map product_id to product_price. That map is the Current Price. Do not show a hardcoded price.
+
+Also POST https://panel.whitelabelmd.com/wlmdbackend/api/get_products with the same headers and site_id={{site_id}}. ShapeMeds uses this list for the dashboard rows: uniq_id, sticky_product_id, product_name, product_sku, product_price. The update call must use sticky_product_id. Resolve that id on the server from this list. The client sends only the catalog product id. If uniq_id and sticky_product_id are the same, send that value. If they differ, send sticky_product_id. Do not invent ids and do not change the catalog.
+
+Update. POST, server-side only:
+https://panel.whitelabelmd.com/wlmdbackend/api/update_product_price
+
+Body, form-urlencoded:
+site_id={{site_id}}
+product_id=<sticky_product_id>
+price=<new price>
+
+Success is status = 1. Show product_price from that response immediately, clear the input, and show the API message. On failure, leave Current Price unchanged, show the API message, and enable the button again. Handle 401 unauthorized, invalid site id, invalid product id, invalid price, 404 product not found, missing site credentials, and Sticky update failed.
+
+Validate the new price the way ShapeMeds does: digits with an optional decimal of one or two places, and the number must be greater than 0. Allow 190, 190.5, 190.50, and 199.99. Reject 0, negatives, letters, extra dots, and more than two decimal places.
+
+The table columns are Product ID, Product Name, SKU, Current Price, New Price, and Action. Each row has its own Update button. While one row saves, disable only that button. The rest of the table stays usable.
+
+After a refresh, Current Price must come from get_product_prices again. The customer-facing pages must use the same live-price server function, with no static fallback that overrides the backend price.
+
+Do not modify the Pro Player Solutions project.
+
+Before writing code, name the files you will add and confirm the browser will not call update_product_price. Then implement.
+
+When done, list the files, confirm site_id {{site_id}} is server-side only, confirm the authtoken never reaches the client bundle, and describe a two-product update plus refresh test.`
+
+const legitBody = `You are a senior engineer working inside {{project_name}} for the brand {{brand_name}}.
+
+Task: add the LegitScript seal to the existing footer. Match the markup used on koverx.com and biomaxrx.com. Do not redesign the footer.
+
+Stack: {{stack}}
+Brand domain, without www: {{brand_domain}}
+This brand's LegitScript seal id: {{legitscript_seal_id}}
+
+Koverx uses checker_keywords=koverx.com and biomaxrx.com uses checker_keywords=biomaxrx.com. Each site must verify its own domain. Do not reuse another brand's domain or seal id.
+
+Place this in the footer, as plain HTML or the project's link component:
+
+<a href="https://www.legitscript.com/websites/?checker_keywords={{brand_domain}}" target="_blank" rel="noopener noreferrer" title="Verify LegitScript Approval for www.{{brand_domain}}">
+  <img src="https://static.legitscript.com/seals/{{legitscript_seal_id}}.png" alt="Verify LegitScript Approval for www.{{brand_domain}}" width="73" height="79" loading="lazy" />
+</a>
+
+The link opens in a new tab. The image is lazy loaded. Do not change checkout, navigation, or other footer links.
+
+When done, name the footer file and confirm the checker_keywords value is {{brand_domain}}.`
+
+const ghlBody = `You are a senior engineer working inside {{project_name}} for the brand {{brand_name}}.
+
+Task: store the questionnaire as each field is completed, then send one webhook when the plans page opens. Do not change checkout, plans, payment, GTM, Meta Pixel, or order logic.
+
+Stack: {{stack}}
+Site id: {{site_id}}
+Webhook URL: {{ghl_webhook_url}}
+
+As the visitor finishes each field, persist that value for the session. Do this for first name, last name, email, phone, and every other questionnaire answer. A later field must not erase earlier ones.
+
+When the plans page opens, POST once to {{ghl_webhook_url}}. Use a session flag so a refresh or a second visit to the plans page does not send again. A missing optional field is an empty string or null, as in the sample. Do not block the plans page if the webhook fails.
+
+The JSON keys must stay exactly these. Fill them from the stored questionnaire, the page URL, and the click ids already on the session. site_id is always {{site_id}}.
+
+{
+  "site_id": "{{site_id}}",
+  "state": "",
+  "first_name": "",
+  "last_name": "",
+  "email": "",
+  "email_consent": "",
+  "phone": "",
+  "sms_consent": "",
+  "dob": "",
+  "gender": "",
+  "bmi": null,
+  "weight_current": null,
+  "weight_goal": null,
+  "taking_weight_loss_meds": "",
+  "weight_loss_medications_currently_taking": "",
+  "medication_trying_to_get": "",
+  "source_url": "",
+  "click_id": "",
+  "utm_source": "",
+  "utm_medium": "",
+  "utm_term": "",
+  "utm_campaign": "",
+  "utm_content": "",
+  "fbclid": "",
+  "google_click_id": "",
+  "msclkid": "",
+  "medication_dose": "",
+  "ed_prior_treatments": "",
+  "ed_problem_duration": ""
+}
+
+email_consent and sms_consent are "yes" or "no". dob stays YYYY-MM-DD. bmi and the weight fields are numbers or null.
+
+Before writing code, find the questionnaire field handlers and the plans page mount. Then implement.
+
+When done, list the files and how to confirm one POST per session with the stored first name, last name, and phone.`
+
 export function seedDatabase(): Database {
   const now = Date.now()
   return {
@@ -340,6 +476,33 @@ export function seedDatabase(): Database {
         description:
           "Load the Endorsely script and pass the referral id through checkout.",
         body: endorselyBody,
+        updatedAt: now,
+      },
+      {
+        id: "tpl_pricing",
+        title: "Admin pricing dashboard",
+        category: "Pricing",
+        description:
+          "ShapeMeds-style admin login and live price update, with this brand's site id.",
+        body: pricingBody,
+        updatedAt: now,
+      },
+      {
+        id: "tpl_legit",
+        title: "LegitScript seal",
+        category: "Trust",
+        description:
+          "Footer LegitScript link and seal for this brand's own domain.",
+        body: legitBody,
+        updatedAt: now,
+      },
+      {
+        id: "tpl_ghl",
+        title: "Plans page webhook",
+        category: "Tracking",
+        description:
+          "Store each questionnaire answer, then POST once when the plans page opens.",
+        body: ghlBody,
         updatedAt: now,
       },
     ],

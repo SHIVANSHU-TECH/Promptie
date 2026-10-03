@@ -10,6 +10,7 @@ const links = [
   { href: "/templates", label: "Templates" },
   { href: "/companies", label: "Companies" },
   { href: "/chat", label: "Chat" },
+  { href: "/testing", label: "Testing" },
 ]
 
 function isCurrent(href: string, path: string) {
