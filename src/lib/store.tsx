@@ -113,7 +113,7 @@ function asCompany(id: string, data: DocumentData): Company | null {
 function firebaseMessage(error: unknown) {
   const code = typeof error === "object" && error && "code" in error ? String((error as { code: string }).code) : ""
   if (code.includes("permission-denied")) {
-    return "Firestore blocked Promptie. Allow read and write on promptie_templates, promptie_companies, and promptie_meta."
+    return "Firestore blocked this account. In the promotional Firebase project, allow signed-in users to read and write promptie_templates, promptie_companies, and promptie_meta."
   }
   return "Could not reach Firebase."
 }

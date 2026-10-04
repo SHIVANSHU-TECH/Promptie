@@ -30,14 +30,17 @@ function stamp() {
 
 const actions = [
   {
-    label: "Enhance open prompt",
-    text: "Enhance the prompt that is open on the board. Make the instructions sharper and more complete, and return it as a library prompt with a clear title.",
+    kind: "modify" as const,
+    label: "Modify this prompt",
+    text: "Modify the one selected library prompt for this project. Keep the {{slots}}, make the instructions sharper and more complete, and return it as a library prompt with a clear title.",
   },
   {
-    label: "Combine selected",
+    kind: "merge" as const,
+    label: "Merge selected prompts",
     text: "Combine the selected library prompts into one reusable prompt. Keep every distinct requirement and the {{slots}}, and give the result a clear title.",
   },
   {
+    kind: "write" as const,
     label: "Write a new prompt",
     text: "Write a new reusable prompt this team can run for the brand. Give it a specific title, a category, and {{slot}} placeholders for anything that changes per company.",
   },
@@ -120,8 +123,12 @@ export function BrandChat() {
   async function send(text?: string) {
     const content = (text ?? draft).trim()
     if (!content || !company || pending) return
+    if (content.startsWith("Modify the one selected") && selectedIds.length !== 1) {
+      setError("Check one prompt, then modify it.")
+      return
+    }
     if (content.startsWith("Combine the selected") && selectedIds.length < 2) {
-      setError("Select at least two prompts to combine.")
+      setError("Check at least two prompts, then merge them.")
       return
     }
     setDraft("")
@@ -137,7 +144,9 @@ export function BrandChat() {
       { role: "user" as const, content },
     ]
     const chosen = templates.filter((item) => selectedIds.includes(item.id))
-    const authoring = /^(Enhance the prompt|Combine the selected|Write a new reusable prompt)/.test(content)
+    const modifying = content.startsWith("Modify the one selected")
+    const authoring = /^(Modify the one selected|Combine the selected|Write a new reusable prompt)/.test(content)
+    const focus = modifying ? chosen[0] : template
     try {
       await addDoc(collection(db, COMPANIES, company.id, "messages"), {
         role: "user",
@@ -150,10 +159,14 @@ export function BrandChat() {
         body: JSON.stringify({
           companyName: company.name,
           values: company.values,
-          templateTitle: template?.title ?? "",
-          templateBody: template?.body ?? "",
-          filledPrompt: authoring ? "" : template ? fillPrompt(template.body, company.values) : "",
-          templates: chosen.map((item) => ({ title: item.title, category: item.category, body: item.body })),
+          templateTitle: focus?.title ?? "",
+          templateBody: focus?.body ?? "",
+          filledPrompt: authoring ? "" : focus ? fillPrompt(focus.body, company.values) : "",
+          templates: (modifying && focus ? [focus] : chosen).map((item) => ({
+            title: item.title,
+            category: item.category,
+            body: item.body,
+          })),
           messages: history,
         }),
       })
@@ -214,7 +227,8 @@ export function BrandChat() {
           </p>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-3">
-          <p className="px-2 text-xs font-medium tracking-wide text-muted uppercase">Include in chat</p>
+          <p className="px-2 text-xs font-medium tracking-wide text-muted uppercase">Prompts to use</p>
+          <p className="px-2 pt-1 text-xs leading-5 text-muted">Check one to modify it. Check two or more to merge them.</p>
           <ul className="mt-2 space-y-1">
             {templates.map((item) => (
               <li key={item.id}>
@@ -243,7 +257,11 @@ export function BrandChat() {
               key={action.label}
               type="button"
               className={btnGhost}
-              disabled={pending}
+              disabled={
+                pending ||
+                (action.kind === "modify" && selectedIds.length !== 1) ||
+                (action.kind === "merge" && selectedIds.length < 2)
+              }
               onClick={() => void send(action.text)}
             >
               {action.label}
@@ -252,7 +270,7 @@ export function BrandChat() {
         </div>
         <details className="border-b border-line px-4 py-2 lg:hidden">
           <summary className="cursor-pointer text-sm font-medium">
-            Include in chat ({selectedIds.length})
+            Prompts to use ({selectedIds.length})
           </summary>
           <ul className="mt-2 space-y-1 pb-2">
             {templates.map((item) => (
@@ -276,8 +294,8 @@ export function BrandChat() {
               <div className="rounded-lg border border-line bg-card px-4 py-4">
                 <p className="text-sm font-medium">Chat with {company.name}</p>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Enhance the open prompt, combine the ones you check, or ask Groq to write a new one. A finished prompt
-                  shows up with its title, a copy button, and a way to add it to the library.
+                  Check one prompt and modify it for this project, or check several and merge them into one. Add the
+                  result to the library, then open it on the Board and copy it for this company.
                 </p>
               </div>
             ) : null}

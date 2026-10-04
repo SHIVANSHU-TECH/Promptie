@@ -2,8 +2,10 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useAuth } from "@/lib/auth"
 import { useStore } from "@/lib/store"
 import { LibraryMenu } from "./LibraryMenu"
+import { UserGuide } from "./UserGuide"
 
 const links = [
   { href: "/", label: "Board" },
@@ -20,8 +22,11 @@ function isCurrent(href: string, path: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname()
+  const { user, signOutUser } = useAuth()
   const { ready, error, companies, selectedCompanyId, setSelectedCompanyId } = useStore()
   const ordered = [...companies].sort((a, b) => a.name.localeCompare(b.name))
+  const accountName = user?.displayName || user?.email || "Signed in"
+  const initial = accountName.slice(0, 1).toUpperCase()
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -48,7 +53,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )
             })}
           </nav>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <UserGuide />
             <LibraryMenu />
             <label className="flex items-center gap-2 text-sm text-white/70">
               <span className="hidden sm:inline">Company</span>
@@ -74,6 +80,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               Add company
             </Link>
+            <div className="flex items-center gap-2 rounded-md border border-white/15 bg-white/10 py-1 pr-1 pl-1">
+              {user?.photoURL ? (
+                // Google profile photos are remote and change per account.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.photoURL} alt="" className="h-6 w-6 rounded-full" />
+              ) : (
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-accent text-xs font-semibold">{initial}</span>
+              )}
+              <span className="hidden max-w-[9rem] truncate text-sm sm:inline">{accountName}</span>
+              <button
+                type="button"
+                className="rounded-md px-2 py-1 text-sm text-white/80 hover:bg-white/10 hover:text-white"
+                onClick={signOutUser}
+              >
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       </header>

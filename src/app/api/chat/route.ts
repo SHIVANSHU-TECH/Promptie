@@ -141,7 +141,7 @@ ${parameters}${open}${filled}${selected}`
 
 function wantsDraft(turns: ChatTurn[]) {
   const last = turns[turns.length - 1]?.content ?? ""
-  return /\b(enhance|combin|write a new|library prompt|reusable prompt)\b/i.test(last)
+  return /\b(enhance|modify|combin|merge|write a new|library prompt|reusable prompt)\b/i.test(last)
 }
 
 export async function POST(request: Request) {
