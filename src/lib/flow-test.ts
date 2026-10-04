@@ -42,14 +42,17 @@ function check(id: string, name: string, ok: boolean, detail: string): FlowCheck
   return { id, name, status: ok ? "pass" : "fail", detail }
 }
 
-export async function runFlowTest(rawUrl: string): Promise<FlowReport> {
+export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<FlowReport> {
   const url = publicUrl(rawUrl)
+  const email = memberEmail.trim()
+  if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+    throw new Error("Enter a valid member email.")
+  }
   const startedAt = new Date().toISOString()
-  const stamp = Date.now().toString(36)
   const buyer: Buyer = {
     first: "Quinn",
     last: "Hale",
-    email: `promptie.qa.${stamp}@example.com`,
+    email,
     phone: "2025550148",
     address: "120 Market Street",
     city: "Austin",
@@ -195,7 +198,7 @@ export async function runFlowTest(rawUrl: string): Promise<FlowReport> {
       orderId = placed.orderId
       checks.push(check("order", "Create the order", Boolean(orderId), orderId ? `Order id ${orderId}.` : placed.detail))
     }
-    checks.push(check("email", "Mail id used", true, buyer.email))
+    checks.push(check("email", "Member email", true, buyer.email))
 
     await browser.goto(url)
     checks.push(...(await legalChecks(browser)))

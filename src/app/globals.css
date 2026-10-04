@@ -55,3 +55,24 @@ body {
 ::selection {
   background: #cfe8dc;
 }
+
+@keyframes guide-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.guide-rise {
+  animation: guide-rise 420ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-rise {
+    animation: none;
+  }
+}

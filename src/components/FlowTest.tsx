@@ -5,11 +5,15 @@ import type { FlowReport } from "@/lib/flow-report"
 import { reportPassed } from "@/lib/flow-report"
 import { btnGhost, btnPrimary, field } from "@/lib/styles"
 
+const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
+
 export function FlowTest() {
   const [url, setUrl] = useState("")
+  const [email, setEmail] = useState("")
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<FlowReport | null>(null)
+  const emailReady = emailPattern.test(email.trim())
 
   async function runTest() {
     setPending(true)
@@ -18,7 +22,7 @@ export function FlowTest() {
       const response = await fetch("/api/flow-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, email: email.trim() }),
       })
       const payload = (await response.json()) as FlowReport & { error?: string }
       if (!response.ok) throw new Error(payload.error || "The flow test could not finish.")
@@ -55,30 +59,55 @@ export function FlowTest() {
         <p className="text-xs font-medium tracking-wide text-muted uppercase">Automation</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Flow testing</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Paste a Lovable or live store link. The run follows the store path: two product pages, Add to Cart, the cart,
-          then checkout. It fills contact, shipping, HIPAA, and telehealth consent, and checks phone and desktop layout
-          on each of those pages plus the legal footer. Coupon GLOBAL100 is used only when Stripe is live. A Stripe test
-          key skips the coupon.
+          The run follows the ShapeMeds path: two treatments, Add to Cart, the cart, checkout, consent, and the legal
+          pages. Enter the member email here. That address is typed at checkout and returned with the order id.
         </p>
+        <ol className="mt-5 flex flex-wrap gap-2 text-xs font-medium text-muted">
+          {["Home", "Product", "Cart", "Checkout", "Order", "Legal"].map((step, index) => (
+            <li key={step} className="flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-full bg-accent-soft text-accent">{index + 1}</span>
+              {step}
+            </li>
+          ))}
+        </ol>
         <form
-          className="mt-6 flex flex-col gap-3 sm:flex-row"
+          className="mt-6 rounded-2xl border border-line bg-card p-5 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault()
             void runTest()
           }}
         >
-          <label className="min-w-0 flex-1">
-            <span className="sr-only">Store link</span>
-            <input
-              className={field}
-              value={url}
-              placeholder="https://your-store.lovable.app"
-              onChange={(event) => setUrl(event.target.value)}
-            />
-          </label>
-          <button type="submit" className={btnPrimary} disabled={pending || url.trim().length === 0}>
-            {pending ? "Running…" : "Run test"}
-          </button>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label>
+              <span className="mb-1.5 block text-xs font-medium tracking-wide text-muted uppercase">Store link</span>
+              <input
+                className={field}
+                value={url}
+                placeholder="https://shapemeds.com"
+                onChange={(event) => setUrl(event.target.value)}
+              />
+            </label>
+            <label>
+              <span className="mb-1.5 block text-xs font-medium tracking-wide text-muted uppercase">Member email</span>
+              <input
+                className={field}
+                type="email"
+                autoComplete="email"
+                value={email}
+                placeholder="member@clinic.com"
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-md text-xs leading-5 text-muted">
+              Coupon GLOBAL100 is used only when Stripe is live. A test key skips the coupon. The report lists this
+              member email beside the order id.
+            </p>
+            <button type="submit" className={btnPrimary} disabled={pending || url.trim().length === 0 || !emailReady}>
+              {pending ? "Running…" : "Run test"}
+            </button>
+          </div>
         </form>
         {error ? <p className="mt-4 text-sm text-warn">{error}</p> : null}
         {report ? (
@@ -109,7 +138,7 @@ export function FlowTest() {
                 <dd className="mt-1 font-medium">{report.orderId || "Not created"}</dd>
               </div>
               <div>
-                <dt className="text-xs tracking-wide text-muted uppercase">Mail id</dt>
+                <dt className="text-xs tracking-wide text-muted uppercase">Member email</dt>
                 <dd className="mt-1 font-medium">{report.email || "Not entered"}</dd>
               </div>
               <div>
