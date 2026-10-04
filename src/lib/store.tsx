@@ -37,6 +37,7 @@ type UiPrefs = { selectedCompanyId: string | null; activeTemplateId: string | nu
 
 const StoreContext = createContext<Store | null>(null)
 const UI_KEY = "promptie.ui"
+const PLACEHOLDER_COMPANIES = ["co_northwind", "co_harbor"]
 const emptyUi: UiPrefs = { selectedCompanyId: null, activeTemplateId: null }
 const uiListeners = new Set<() => void>()
 let uiPrefs: UiPrefs = emptyUi
@@ -189,6 +190,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         companiesRef.current = latestCompanies
         setCompanies(latestCompanies)
         setCompaniesReady(true)
+        for (const id of PLACEHOLDER_COMPANIES) {
+          if (latestCompanies.some((company) => company.id === id)) {
+            void deleteDoc(doc(db, COMPANIES, id)).catch(() => undefined)
+          }
+        }
         setError(null)
         considerSeed()
       },

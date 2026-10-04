@@ -1,5 +1,7 @@
 import Groq from "groq-sdk"
 import { NextResponse } from "next/server"
+import { createMemberConfig, memberJson, memberRequestFromText } from "@/lib/member-config"
+import { asksForDirectory, asksForMemberJson, formatDirectory, loadDirectory, searchDirectory } from "@/lib/sheet-directory"
 
 export const runtime = "nodejs"
 
@@ -108,6 +110,7 @@ function brandBrief(
   templateBody: string,
   filledPrompt: string,
   library: { title: string; category: string; body: string }[],
+  sheetContext: string,
 ) {
   const lines = Object.entries(values)
     .filter(([, value]) => value.trim())
@@ -122,7 +125,7 @@ function brandBrief(
         .join("\n\n")}`
     : ""
   const filled = filledPrompt.trim() ? `\nThat open prompt filled for ${name}:\n${filledPrompt.trim().slice(0, 6000)}` : ""
-  return `You are Promptie's assistant for the brand ${name}. Help the team write, enhance, and combine reusable prompts for this brand.
+  return `You are Promptie's assistant for the brand ${name}. Help the team write, enhance, and combine reusable prompts for this brand.${sheetContext}
 
 Reply with JSON only, no markdown fence:
 {"reply":"one or two sentences","prompt":null}
@@ -133,7 +136,7 @@ If the user asks you to write, enhance, or combine a prompt, prompt must be an o
 In prompt.body keep {{slot}} placeholders for anything that changes per company, especially brand_name and project_name. Do not replace those slots with this brand's real values.
 The title must name the job, not the brand.
 Do not repeat the full prompt inside reply.
-Do not invent API keys or secrets.
+Do not invent API keys, site ids, or chat widget ids. When a checkout sheet match is included below, use that site id and widget id.
 
 Brand parameters:
 ${parameters}${open}${filled}${selected}`
@@ -145,11 +148,6 @@ function wantsDraft(turns: ChatTurn[]) {
 }
 
 export async function POST(request: Request) {
-  const key = process.env.GROQ_API_KEY
-  if (!key) {
-    return NextResponse.json({ error: "Groq is not configured on the server." }, { status: 503 })
-  }
-
   let body: ChatBody
   try {
     body = (await request.json()) as ChatBody
@@ -158,13 +156,48 @@ export async function POST(request: Request) {
   }
 
   const companyName = typeof body.companyName === "string" ? body.companyName.trim().slice(0, 120) : ""
-  if (!companyName) {
-    return NextResponse.json({ error: "Choose a company before chatting." }, { status: 400 })
-  }
 
   const turns = asTurns(body.messages)
   if (!turns.length || turns[turns.length - 1]?.role !== "user") {
     return NextResponse.json({ error: "Send a message first." }, { status: 400 })
+  }
+  const last = turns[turns.length - 1]?.content ?? ""
+
+  if (asksForMemberJson(last)) {
+    const request = memberRequestFromText(last, companyName)
+    if (!request?.name || !request.websiteUrl) {
+      return NextResponse.json({
+        reply:
+          "Name the project and include the live or Lovable link. Site id and widget are filled from the checkout sheet when that brand is listed. Paste Drive links for the logo and favicon if you have them.",
+        prompt: null,
+        memberJson: null,
+      })
+    }
+    try {
+      const built = await createMemberConfig(request)
+      return NextResponse.json({ reply: built.note, prompt: null, memberJson: memberJson(built.config) })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The member JSON could not be built."
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
+  }
+
+  if (asksForDirectory(last)) {
+    try {
+      const matches = searchDirectory(await loadDirectory(), `${last}\n${companyName}`)
+      return NextResponse.json({ reply: formatDirectory(matches), prompt: null, memberJson: null })
+    } catch {
+      return NextResponse.json({ error: "The checkout sheet could not be read." }, { status: 502 })
+    }
+  }
+
+  if (!companyName) {
+    return NextResponse.json({ error: "Choose a company before chatting." }, { status: 400 })
+  }
+
+  const key = process.env.GROQ_API_KEY
+  if (!key) {
+    return NextResponse.json({ error: "Groq is not configured on the server." }, { status: 503 })
   }
 
   const values = asRecord(body.values)
@@ -173,6 +206,13 @@ export async function POST(request: Request) {
   const filledPrompt = typeof body.filledPrompt === "string" ? body.filledPrompt : ""
   const library = asTemplates(body.templates)
   const groq = new Groq({ apiKey: key })
+  let sheetContext = ""
+  try {
+    const matches = searchDirectory(await loadDirectory(), `${last}\n${companyName}`)
+    if (matches.length) sheetContext = `\n\nCheckout sheet:\n${formatDirectory(matches)}`
+  } catch {
+    sheetContext = ""
+  }
 
   try {
     const completion = await groq.chat.completions.create({
@@ -182,7 +222,7 @@ export async function POST(request: Request) {
       messages: [
         {
           role: "system",
-          content: brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library),
+          content: brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library, sheetContext),
         },
         ...turns,
       ],
@@ -200,7 +240,7 @@ export async function POST(request: Request) {
         messages: [
           {
             role: "system",
-            content: brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library),
+            content: brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library, sheetContext),
           },
           ...turns,
           { role: "assistant", content: text.slice(0, 6000) },

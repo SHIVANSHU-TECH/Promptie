@@ -101,8 +101,8 @@ function SignInScreen() {
           </div>
         </div>
         <p className="mt-4 text-sm leading-6 text-muted">
-          Keep one prompt library, fill it for each brand, and test the store checkout from the same place. Sign in with
-          Google to open the library.
+          One library for every brand. Fill a prompt, look up a site id and chat widget, build a member JSON, and test
+          checkout from the same place. Sign in with Google to open it. How to use walks through the whole path.
         </p>
         <button
           type="button"

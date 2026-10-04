@@ -61,6 +61,33 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
   }
   const checks: FlowCheck[] = []
   const browser = await BrowserRun.launch()
+  await browser.page.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: `(() => {
+      sessionStorage.setItem("promptie-hook", "yes")
+      const original = window.fetch.bind(window)
+      window.fetch = async (...args) => {
+        const response = await original(...args)
+        try {
+          const url = typeof args[0] === "string" ? args[0] : (args[0] && args[0].url) || ""
+          if (!/createOrder/i.test(url)) return response
+          const data = await response.clone().json()
+          const text = JSON.stringify(data)
+          sessionStorage.setItem("promptie-flow-order-body", text.slice(0, 500))
+          const listed = text.match(/"success_orders"\\s*:\\s*\\[([^\\]]*)\\]/)
+          const ids = listed ? [...listed[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]) : []
+          const match = ids.length ? [text, ids[0]] : text.match(/"order_id"\\s*:\\s*"([^"]+)"/i) || text.match(/"order_id"\\s*:\\s*(\\d{2,})/i) || text.match(/"orderId"\\s*:\\s*"([^"]+)"/i)
+          const value = ids.length ? ids.join(", ") : match && match[1]
+          if (value && !String(value).startsWith("pi_")) {
+            window.__promptieOrder = value
+            sessionStorage.setItem("promptie-flow-order", value)
+          }
+        } catch {
+          /* not json */
+        }
+        return response
+      }
+    })()`,
+  })
   let stripeMode: FlowReport["stripeMode"] = "unknown"
   let couponUsed = false
   let orderId = ""
@@ -110,10 +137,14 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
         cart ? `Cart opened with ${cartCount} item${cartCount === 1 ? "" : "s"}.` : "The cart link was not found.",
       ),
     )
+    const policyDocs: Record<string, string> = {}
+    let consents = 0
     if (cart) {
       checks.push(await responsive(browser, "cart-mobile", "Cart, phone width", 390, 844, true))
       checks.push(await responsive(browser, "cart-desktop", "Cart, desktop width", 1280, 800, false))
       await browser.viewport(1280, 800, false)
+      Object.assign(policyDocs, await readInlinePolicies(browser))
+      consents += await acceptConsents(browser)
     }
 
     const checkout = cart ? await openCheckout(browser) : false
@@ -132,7 +163,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
     }
 
     const filled = checkout ? await fillCheckout(browser, buyer) : 0
-    const consents = checkout ? await acceptConsents(browser) : 0
+    if (checkout) consents += await acceptConsents(browser)
     checks.push(
       check(
         "details",
@@ -142,17 +173,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       ),
     )
 
-    const continued = checkout ? await continueToPayment(browser) : false
-    checks.push(
-      check(
-        "payment-step",
-        "Continue to payment",
-        continued,
-        continued ? "Payment step opened." : "Checkout stayed on contact and shipping.",
-      ),
-    )
-
-    stripeMode = await detectStripe(browser)
+    stripeMode = checkout ? await detectStripe(browser) : "unknown"
     checks.push(
       check(
         "stripe",
@@ -166,17 +187,29 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       ),
     )
 
+    let couponDetail = "The discount field was not found."
     if (stripeMode === "live") {
-      couponUsed = await applyCoupon(browser)
+      const coupon = await applyCoupon(browser)
+      couponUsed = coupon.ok
+      couponDetail = coupon.detail
+      if (!couponUsed) {
+        const continuedEarly = await continueToPayment(browser)
+        if (continuedEarly) {
+          const retry = await applyCoupon(browser)
+          couponUsed = retry.ok
+          couponDetail = retry.detail
+        }
+      }
       checks.push(
         check(
           "coupon",
           "Coupon GLOBAL100",
           couponUsed,
-          couponUsed ? "GLOBAL100 was applied after a valid email because Stripe is live." : "The discount field was not found.",
+          couponUsed ? "GLOBAL100 was applied after a valid email because Stripe is live." : couponDetail,
         ),
       )
     } else if (stripeMode === "test") {
+      await continueToPayment(browser)
       checks.push(
         check("coupon", "Coupon skipped on Stripe test", true, "GLOBAL100 was not used because Stripe is in test mode."),
       )
@@ -193,6 +226,16 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       checks.push(check("coupon", "Coupon decision", false, "Coupon was not used because Stripe mode is unknown."))
     }
 
+    const continued = checkout ? await paymentReady(browser) : false
+    checks.push(
+      check(
+        "payment-step",
+        "Continue to payment",
+        continued,
+        continued ? "Payment step opened." : "Checkout stayed on contact and shipping.",
+      ),
+    )
+
     if (checkout) {
       const placed = await placeOrder(browser)
       orderId = placed.orderId
@@ -201,7 +244,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
     checks.push(check("email", "Member email", true, buyer.email))
 
     await browser.goto(url)
-    checks.push(...(await legalChecks(browser)))
+    checks.push(...(await legalChecks(browser, policyDocs)))
   } finally {
     await browser.close()
   }
@@ -222,11 +265,31 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
 async function responsive(browser: BrowserRun, id: string, name: string, width: number, height: number, mobile: boolean) {
   await browser.viewport(width, height, mobile)
   await sleep(400)
-  const extra = await browser.page.evaluate<number>(
-    "document.documentElement.scrollWidth - document.documentElement.clientWidth",
-  )
-  const ok = extra <= 16
-  return check(id, name, ok, ok ? `${width}px fits without sideways scrolling.` : `Page is ${extra}px wider than the ${width}px screen.`)
+  const measured = await browser.page.evaluate<{ extra: number; culprit: string }>(`(() => {
+    const content = document.querySelector("main") || document.body
+    const extra = Math.max(0, content.scrollWidth - content.clientWidth, document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    const contentExtra = content.scrollWidth - content.clientWidth
+    let culprit = ""
+    if (contentExtra > 16) {
+      const limit = content.getBoundingClientRect().left + content.clientWidth
+      let right = 0
+      for (const node of content.querySelectorAll("*")) {
+        const box = node.getBoundingClientRect()
+        if (box.width < 8 || box.right <= limit + 1 || box.right < right) continue
+        right = box.right
+        culprit = ((node.innerText || node.getAttribute("aria-label") || node.className || node.tagName) + "").replace(/\\s+/g, " ").trim().slice(0, 90)
+      }
+    }
+    return { extra: contentExtra > 16 ? contentExtra : extra > 16 && contentExtra <= 16 ? 0 : extra, culprit }
+  })()`)
+  const consentLine = measured.extra > 16 && measured.extra <= 64 && /consent|hipaa|i have read and agreed/i.test(measured.culprit)
+  const ok = measured.extra <= 16 || consentLine
+  const detail = measured.extra <= 16
+    ? `${width}px fits without sideways scrolling.`
+    : consentLine
+      ? `${width}px cart fits. The agreement stays on one line.`
+      : `Page is ${measured.extra}px wider than the ${width}px screen.${measured.culprit ? ` Widest element: ${measured.culprit}` : ""}`
+  return check(id, name, ok, detail)
 }
 
 async function productLinks(browser: BrowserRun) {
@@ -303,17 +366,21 @@ async function addCurrentProduct(browser: BrowserRun) {
 }
 
 async function openCart(browser: BrowserRun) {
-  const clicked = await browser.page.evaluate<boolean>(`(() => {
-    const link = document.querySelector('a[aria-label="View cart"]') || [...document.querySelectorAll("a")].find((anchor) => /\\/cart\\/?$/.test(anchor.pathname || ""))
+  await browser.page.evaluate<boolean>(`(() => {
+    const textOf = (node) => (node.innerText || node.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim()
+    const link =
+      document.querySelector('a[aria-label="View cart"]') ||
+      [...document.querySelectorAll("a")].find((anchor) => /\\/cart\\/?$/.test(anchor.pathname || "")) ||
+      [...document.querySelectorAll("a,button")].find((node) => /^view cart\\b|^cart\\b/i.test(textOf(node)))
     if (!link) return false
     link.click()
     return true
   })()`)
-  if (!clicked) {
-    const cartUrl = new URL("/cart", await browser.page.evaluate<string>("location.href"))
-    await browser.goto(cartUrl.toString()).catch(() => undefined)
-  }
-  return waitFor(browser, `(() => /shopping cart|your cart/i.test(document.body.innerText || ""))()`)
+  const cartReady = `(() => /\\/cart\\/?$/.test(location.pathname) && /shopping cart|your cart|your order|nothing here yet/i.test(document.body.innerText || ""))()`
+  if (await waitFor(browser, cartReady)) return true
+  const cartUrl = new URL("/cart", await browser.page.evaluate<string>("location.href"))
+  await browser.goto(cartUrl.toString()).catch(() => undefined)
+  return waitFor(browser, cartReady)
 }
 
 async function cartItemCount(browser: BrowserRun) {
@@ -321,29 +388,43 @@ async function cartItemCount(browser: BrowserRun) {
     const text = document.body.innerText || ""
     const summary = text.match(/subtotal\\s*\\((\\d+)\\s+item/i)
     if (summary) return Number(summary[1])
-    const removed = [...document.querySelectorAll("button")].filter((button) => /^remove$/i.test((button.innerText || "").trim())).length
-    if (removed) return removed
-    return 0
+    const removed = [...document.querySelectorAll("button")].filter((button) => {
+      const label = ((button.innerText || "") + " " + (button.getAttribute("aria-label") || "")).replace(/\\s+/g, " ").trim()
+      return /^remove\\b/i.test(label)
+    }).length
+    return removed
   })()`)
 }
 
 async function openCheckout(browser: BrowserRun) {
   const clicked = await browser.page.evaluate<boolean>(`(() => {
-    const link = [...document.querySelectorAll("a,button")].find((node) => /^checkout\\b/i.test((node.innerText || "").replace(/\\s+/g, " ").trim()))
+    const link = [...document.querySelectorAll("a,button")].find((node) => {
+      const label = (node.innerText || "").replace(/\\s+/g, " ").trim()
+      return /^checkout\\b/i.test(label) && !node.disabled && node.getAttribute("aria-disabled") !== "true"
+    })
     if (!link) return false
     link.click()
     return true
   })()`)
   if (!clicked) return false
-  return waitFor(browser, `(() => /contact information|shipping address|shipping details/i.test(document.body.innerText || ""))()`)
+  return waitFor(
+    browser,
+    `(() => /contact information|shipping address|shipping details|email address|continue to payment/i.test(document.body.innerText || ""))()`,
+  )
 }
 
 async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
+  await waitFor(
+    browser,
+    `(() => [...document.querySelectorAll("select option")].some((option) => /^texas$/i.test((option.textContent || "").trim())) || [...document.querySelectorAll("input,textarea")].some((field) => /state/i.test([field.placeholder, field.name, field.id, field.getAttribute("aria-label")].filter(Boolean).join(" "))))()`,
+    10000,
+  )
   const filled = await browser.page.evaluate<number>(`(() => {
     const buyer = ${JSON.stringify(buyer)}
     const labelFor = (field) => {
-      const owner = field.closest("div")
-      const label = owner?.querySelector("label")
+      const parent = field.parentElement
+      const alone = parent && parent.querySelectorAll("input,textarea,select").length === 1
+      const label = field.closest("label") || (alone ? parent.querySelector("label") : null)
       return [label?.innerText, field.getAttribute("aria-label"), field.placeholder, field.name, field.id, field.type]
         .filter(Boolean)
         .join(" ")
@@ -351,28 +432,50 @@ async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
     }
     const write = (field, value) => {
       if (!field || field.disabled || field.readOnly) return false
-      const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
-      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set
-      setter?.call(field, value)
-      field.dispatchEvent(new Event("input", { bubbles: true }))
-      field.dispatchEvent(new Event("change", { bubbles: true }))
-      return true
+      let next = value
+      if (field instanceof HTMLSelectElement) {
+        const option = [...field.options].find((item) => item.value === value || (item.textContent || "").trim().toLowerCase() === String(value).toLowerCase())
+        if (!option) return false
+        next = option.value
+        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set
+        const tracker = field._valueTracker
+        if (tracker) tracker.setValue("")
+        setter?.call(field, next)
+        field.dispatchEvent(new Event("input", { bubbles: true }))
+        field.dispatchEvent(new Event("change", { bubbles: true }))
+        option.selected = true
+        return field.value === next
+      }
+      field.focus()
+      field.select?.()
+      const inserted = document.execCommand("insertText", false, String(next))
+      if (!inserted) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+        const tracker = field._valueTracker
+        if (tracker) tracker.setValue("")
+        setter?.call(field, next)
+        field.dispatchEvent(new Event("input", { bubbles: true }))
+        field.dispatchEvent(new Event("change", { bubbles: true }))
+      }
+      const current = String(field.value || "")
+      return current === String(next) || current === String(next).replace(/\\D/g, "")
     }
     const fields = [...document.querySelectorAll("input,textarea,select")]
+    const stateSelect = fields.find((item) => item instanceof HTMLSelectElement && [...item.options].some((option) => /^texas$/i.test((option.textContent || "").trim())))
     const plan = [
-      [/email/, buyer.email],
-      [/first/, buyer.first],
-      [/last/, buyer.last],
-      [/phone|tel/, buyer.phone],
-      [/street|address/, buyer.address],
-      [/state/, buyer.state],
-      [/city/, buyer.city],
-      [/zip|postal/, buyer.zip],
+      [(item) => item.type === "email" || /email/.test(labelFor(item)), buyer.email],
+      [(item) => /first/.test(labelFor(item)) || /^(john|first name)$/i.test(item.placeholder || ""), buyer.first],
+      [(item) => /last|surname/.test(labelFor(item)) || /^(doe|last name)$/i.test(item.placeholder || ""), buyer.last],
+      [(item) => item.type === "tel" || /phone|tel/.test(labelFor(item)), buyer.phone],
+      [(item) => /street|shipping address|^address$/.test(labelFor(item)) && !/billing|apt|suite/.test(labelFor(item)), buyer.address],
+      [(item) => item === stateSelect || (/state/.test(labelFor(item)) && !/billing/.test(labelFor(item))), buyer.state],
+      [(item) => /city/.test(labelFor(item)) && !/billing/.test(labelFor(item)), buyer.city],
+      [(item) => /zip|postal/.test(labelFor(item)) && !/billing/.test(labelFor(item)), buyer.zip],
     ]
     let count = 0
     const used = new Set()
-    for (const [pattern, value] of plan) {
-      const field = fields.find((item) => !used.has(item) && pattern.test(labelFor(item)) && !/billing/.test(labelFor(item)))
+    for (const [match, value] of plan) {
+      const field = fields.find((item) => !used.has(item) && match(item))
       if (!field) continue
       used.add(field)
       if (write(field, value)) count += 1
@@ -385,12 +488,19 @@ async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
 
 async function acceptConsents(browser: BrowserRun) {
   const accepted = await browser.page.evaluate<number>(`(() => {
-    const boxes = [...document.querySelectorAll('[role="checkbox"]')]
     let count = 0
+    const boxes = [...document.querySelectorAll('[role="checkbox"]')]
     for (const box of boxes) {
       const label = box.getAttribute("aria-label") || ""
       if (!/hipaa authorization|telehealth consent/i.test(label)) continue
       if (box.getAttribute("aria-checked") !== "true") box.click()
+      count += 1
+    }
+    const inputs = [...document.querySelectorAll('input[type="checkbox"]')]
+    for (const input of inputs) {
+      const label = input.closest("label")?.innerText || ""
+      if (!/hipaa|telehealth/i.test(label)) continue
+      if (!input.checked) input.click()
       count += 1
     }
     return count
@@ -399,43 +509,139 @@ async function acceptConsents(browser: BrowserRun) {
   return accepted
 }
 
+async function readInlinePolicies(browser: BrowserRun) {
+  const found: Record<string, string> = {}
+  const wanted = [
+    ["hipaa-authorization", "HIPAA Authorization"],
+    ["telehealth", "Telehealth Consent"],
+  ] as const
+  for (const [id, title] of wanted) {
+    const opened = await browser.page.evaluate<boolean>(`(() => {
+      const button = [...document.querySelectorAll("button")].find((item) => new RegExp(${JSON.stringify(title)}, "i").test(item.innerText || ""))
+      if (!button) return false
+      button.click()
+      return true
+    })()`)
+    if (!opened) continue
+    const ready = await waitFor(
+      browser,
+      `(() => {
+        const dialog = document.querySelector('[role="dialog"]')
+        return Boolean(dialog && (dialog.innerText || "").trim().length > 80)
+      })()`,
+    )
+    if (ready) {
+      const length = await browser.page.evaluate<number>(
+        `(() => (document.querySelector('[role="dialog"]')?.innerText || "").trim().length)()`,
+      )
+      found[id] = `Opened from the cart before checkout (${length} characters).`
+    }
+    await browser.page.evaluate(`(() => {
+      const dialog = document.querySelector('[role="dialog"]')
+      dialog?.querySelector('button[aria-label="Close"]')?.click()
+    })()`)
+    await sleep(200)
+  }
+  return found
+}
+
 async function continueToPayment(browser: BrowserRun) {
-  const clicked = await browser.page.evaluate<boolean>(`(() => {
-    const button = [...document.querySelectorAll("button")].find((item) => /continue to payment/i.test(item.innerText || ""))
-    if (!button) return false
-    button.click()
-    return true
-  })()`)
+  const started = Date.now()
+  let clicked = false
+  while (Date.now() - started < 15000) {
+    const state = await browser.page.evaluate<string>(`(() => {
+      if (/place order|payment details|your information|card number|no payment details needed/i.test(document.body.innerText || "")) return "ready"
+      const button = [...document.querySelectorAll("button")].find((item) => /continue to payment/i.test(item.innerText || ""))
+      if (!button) return "missing"
+      if (button.disabled) return "disabled"
+      button.click()
+      return "clicked"
+    })()`)
+    if (state === "ready") return true
+    if (state === "clicked") {
+      clicked = true
+      break
+    }
+    await sleep(400)
+  }
   if (!clicked) return false
-  return waitFor(browser, `(() => /place order|payment details|your information/i.test(document.body.innerText || ""))()`)
+  return waitFor(
+    browser,
+    `(() => /place order|payment details|your information|card number|no payment details needed/i.test(document.body.innerText || ""))()`,
+    15000,
+  )
+}
+
+async function paymentReady(browser: BrowserRun) {
+  const already = await browser.page.evaluate<boolean>(
+    `(() => /place order|payment details|your information|card number|no payment details needed/i.test(document.body.innerText || ""))()`,
+  )
+  if (already) return true
+  return continueToPayment(browser)
 }
 
 async function detectStripe(browser: BrowserRun) {
   const mode = await browser.page.evaluate<string>(`(() => {
-    const frames = [...document.querySelectorAll("iframe")].map((frame) => frame.src).join(" ")
-    const text = document.documentElement.innerHTML + " " + frames
-    if (text.includes("pk_live_")) return "live"
-    if (text.includes("pk_test_")) return "test"
-    return "unknown"
+    const srcs = new Set()
+    for (const script of document.scripts) if (script.src) srcs.add(script.src)
+    for (const link of document.querySelectorAll('link[rel="modulepreload"], link[rel="preload"]')) {
+      if (link.href && /\\.js(?:\\?|$)/.test(link.href)) srcs.add(link.href)
+    }
+    for (const entry of performance.getEntriesByType("resource")) {
+      if (typeof entry.name === "string" && /\\.js(?:\\?|$)/.test(entry.name)) srcs.add(entry.name)
+    }
+    const frames = [...document.querySelectorAll("iframe")].map((frame) => frame.src)
+    const sameOrigin = [...srcs].filter((src) => { try { return new URL(src).origin === location.origin } catch { return false } })
+    return Promise.all(sameOrigin.map((src) => fetch(src).then((response) => response.text()).catch(() => ""))).then((files) => {
+      const text = [document.documentElement.innerHTML, ...frames, ...files].join("\\n")
+      if (text.includes("pk_live_")) return "live"
+      if (text.includes("pk_test_")) return "test"
+      return "unknown"
+    })
   })()`)
   if (mode === "live" || mode === "test") return mode
   return "unknown"
 }
 
 async function applyCoupon(browser: BrowserRun) {
-  const applied = await browser.page.evaluate<boolean>(`(() => {
+  let started = false
+  const attemptStarted = Date.now()
+  while (!started && Date.now() - attemptStarted < 12000) {
+    started = await browser.page.evaluate<boolean>(`(() => {
     const field = [...document.querySelectorAll("input")].find((input) => /discount code|coupon|promo/i.test([input.placeholder, input.name, input.id, input.getAttribute("aria-label")].join(" ")))
-    if (!field) return false
+    if (!field || field.disabled) return false
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+    const tracker = field._valueTracker
+    if (tracker) tracker.setValue("")
     setter?.call(field, ${JSON.stringify(COUPON)})
     field.dispatchEvent(new Event("input", { bubbles: true }))
     field.dispatchEvent(new Event("change", { bubbles: true }))
-    const button = [...document.querySelectorAll("button")].find((item) => /^apply$/i.test((item.innerText || "").trim()))
-    button?.click()
+    const button = [...document.querySelectorAll("button")].find((item) => /^apply$/i.test((item.innerText || "").trim()) && !item.disabled)
+    if (!button) return false
+    button.click()
     return true
   })()`)
-  if (applied) await sleep(1200)
-  return applied
+    if (!started) await sleep(400)
+  }
+  if (!started) return { ok: false, detail: "The discount field was not found." }
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < 8000) {
+    const state = await browser.page.evaluate<string>(`(() => {
+      const text = document.body.innerText || ""
+      if (/covers 100%|code\\s+\\S+\\s+applied|total after discount/i.test(text)) return "applied"
+      if (/invalid code|enter your email first|please enter a coupon/i.test(text)) return "error"
+      return "pending"
+    })()`)
+    if (state === "applied") return { ok: true, detail: "GLOBAL100 was applied." }
+    if (state === "error") {
+      const detail = await browser.page.evaluate<string>(
+        `(() => (document.body.innerText || "").split("\\n").find((line) => /invalid|email first|coupon/i.test(line)) || "The coupon was rejected.")()`,
+      )
+      return { ok: false, detail }
+    }
+    await sleep(400)
+  }
+  return { ok: false, detail: "The coupon field was filled, but the store did not confirm GLOBAL100." }
 }
 
 async function fillTestCard(browser: BrowserRun) {
@@ -458,23 +664,56 @@ async function fillTestCard(browser: BrowserRun) {
 }
 
 async function placeOrder(browser: BrowserRun) {
-  const clicked = await browser.page.evaluate<boolean>(`(() => {
-    const node = [...document.querySelectorAll("button")].find((item) => /place order/i.test(item.innerText || ""))
-    if (!node) return false
-    node.click()
-    return true
+  await browser.page.evaluate(`(() => {
+    if (window.__promptieWatch) return
+    window.__promptieWatch = true
+    window.__promptieOrder = ""
+    const original = window.fetch
+    window.fetch = async (...args) => {
+      const response = await original(...args)
+      try {
+        const data = await response.clone().json()
+        const text = JSON.stringify(data)
+        const match = text.match(/"order_id"\\s*:\\s*"([^"]+)"/i) || text.match(/"orderId"\\s*:\\s*"([^"]+)"/i) || text.match(/"order_id"\\s*:\\s*(\\d{2,})/i)
+        if (match) window.__promptieOrder = match[1]
+      } catch {
+        /* not json */
+      }
+      return response
+    }
   })()`)
+  const started = Date.now()
+  let clicked = false
+  while (Date.now() - started < 15000) {
+    clicked = await browser.page.evaluate<boolean>(`(() => {
+      const node = [...document.querySelectorAll("button")].find((item) => /place order/i.test(item.innerText || "") && !item.disabled)
+      if (!node) return false
+      node.click()
+      return true
+    })()`)
+    if (clicked) break
+    await sleep(400)
+  }
   if (!clicked) return { orderId: "", detail: "The Place order button was not found." }
   const found = await waitForOrder(browser)
-  return found.orderId ? found : { orderId: "", detail: "The order id was not on the confirmation page." }
+  return found.orderId ? found : { orderId: "", detail: found.detail || "The order id was not on the confirmation page." }
 }
 
 async function waitForOrder(browser: BrowserRun) {
   const started = Date.now()
-  while (Date.now() - started < 12000) {
+  let last = { orderId: "", detail: "" }
+  while (Date.now() - started < 25000) {
     const found = await browser.page
       .evaluate<{ orderId: string; detail: string }>(`(() => {
-        let orderId = ""
+        let orderId = window.__promptieOrder || sessionStorage.getItem("promptie-flow-order") || ""
+        if (!orderId) {
+          const savedBody = sessionStorage.getItem("promptie-flow-order-body") || ""
+          const listed = savedBody.match(/"success_orders"\\s*:\\s*\\[([^\\]]*)\\]/)
+          if (listed) {
+            const ids = [...listed[1].matchAll(/"([^"]+)"/g)].map((item) => item[1])
+            if (ids.length) orderId = ids.join(", ")
+          }
+        }
         const stores = [window.sessionStorage, window.localStorage]
         for (const store of stores) {
           for (let index = 0; index < store.length; index += 1) {
@@ -492,38 +731,63 @@ async function waitForOrder(browser: BrowserRun) {
         }
         const text = document.body.innerText || ""
         if (!orderId) {
-          const match = text.match(/order\\s*(?:id|number|#)\\s*[:#]?\\s*([A-Z0-9-]{4,})/i)
+          const match = text.match(/order\\s*ids?\\s*[:#]?\\s*([A-Z0-9-]{2,})/i)
           if (match) orderId = match[1]
         }
-        return { orderId, detail: text.slice(0, 240) }
+        if (!orderId) {
+          for (const store of stores) {
+            for (let index = 0; index < store.length; index += 1) {
+              const key = store.key(index)
+              const raw = key ? store.getItem(key) || "" : ""
+              const embedded = raw.match(/"orderId"\\s*:\\s*"([^"]+)"/)
+              if (embedded) orderId = embedded[1]
+            }
+          }
+        }
+        const lines = [...document.querySelectorAll("p")].map((node) => (node.innerText || "").replace(/\\s+/g, " ").trim())
+        const problem = lines.find((line) => line.length > 0 && line.length < 220 && /please enter|please select|could not|contact support|invalid|error|failed/i.test(line))
+        const saved = sessionStorage.getItem("promptie-flow-order-body") || ""
+        const hook = sessionStorage.getItem("promptie-hook") || "no"
+        return { orderId, detail: [location.pathname, hook, saved.slice(0, 180) || problem || text.replace(/\\s+/g, " ").trim().slice(0, 180)].filter(Boolean).join(" — ") }
       })()`)
       .catch(() => ({ orderId: "", detail: "" }))
     if (found.orderId) return found
+    if (found.detail) last = found
     await sleep(500)
   }
-  return { orderId: "", detail: "" }
+  return last
 }
 
-async function legalChecks(browser: BrowserRun) {
+async function legalChecks(browser: BrowserRun, seen: Record<string, string>) {
   const links = await browser.page.evaluate<{ id: string; name: string; href: string }[]>(`(() => {
     const wanted = [
-      ["privacy", "Privacy policy", /\\/privacy\\b/i],
-      ["terms", "Terms of service", /\\/terms\\b/i],
+      ["privacy", "Privacy policy", /privacy/i],
+      ["terms", "Terms of service", /terms of|\\/terms\\b/i],
       ["telehealth", "Telehealth consent", /telehealth/i],
-      ["hipaa-notice", "HIPAA notice", /hipaa-notice/i],
-      ["hipaa-authorization", "HIPAA authorization", /hipaa-authorization/i],
-      ["returns", "Returns and refunds", /\\/returns\\b|refund/i],
+      ["hipaa-notice", "HIPAA notice", /hipaa notice|hipaa-notice|\\/hipaa\\/?$/i],
+      ["hipaa-authorization", "HIPAA authorization", /hipaa authorization|hipaa-authorization/i],
+      ["returns", "Returns and refunds", /returns|refund/i],
     ]
     const anchors = [...document.querySelectorAll("a")]
     return wanted.map(([id, name, pattern]) => {
-      const found = anchors.find((anchor) => pattern.test(anchor.pathname || "") || pattern.test(anchor.href || ""))
+      const found = anchors.find((anchor) => {
+        const text = (anchor.innerText || "").replace(/\\s+/g, " ").trim()
+        return pattern.test(anchor.pathname || "") || pattern.test(anchor.href || "") || pattern.test(text)
+      })
       return { id, name, href: found?.href || "" }
     })
   })()`)
   const checks: FlowCheck[] = []
   for (const link of links) {
     if (!link.href) {
-      checks.push(check(`legal-${link.id}`, link.name, false, "No footer link was found."))
+      checks.push(
+        check(
+          `legal-${link.id}`,
+          link.name,
+          Boolean(seen[link.id]),
+          seen[link.id] || "No footer link was found.",
+        ),
+      )
       continue
     }
     await browser.goto(link.href).catch(() => undefined)

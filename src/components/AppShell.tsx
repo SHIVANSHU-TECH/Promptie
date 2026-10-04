@@ -12,6 +12,7 @@ const links = [
   { href: "/templates", label: "Templates" },
   { href: "/companies", label: "Companies" },
   { href: "/chat", label: "Chat" },
+  { href: "/member", label: "Member" },
   { href: "/testing", label: "Testing" },
 ]
 
@@ -36,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-sm">P</span>
             Promptie
           </Link>
-          <nav className="flex items-center gap-1 text-sm">
+          <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm">
             {links.map((link) => {
               const current = isCurrent(link.href, path)
               return (

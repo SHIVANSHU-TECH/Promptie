@@ -13,8 +13,11 @@ type Screen =
   | "thanks"
   | "legal"
   | "signin"
+  | "company"
   | "one"
   | "merge"
+  | "sheet"
+  | "member"
   | "testing"
 
 type Scene = {
@@ -88,13 +91,21 @@ const scenes: Scene[] = [
     chapter: "Promptie",
     time: "0:42",
     title: "Sign in with Google",
-    body: "Promptie opens with one button: Continue with Google. After sign-in, the header has the company menu, How to use, and Sign out.",
+    body: "Promptie opens with one button: Continue with Google. The header then has Board, Templates, Companies, Chat, Member, and Testing, plus the company menu. There are no sample companies to delete.",
     screen: "signin",
+  },
+  {
+    id: "company",
+    chapter: "Promptie",
+    time: "0:48",
+    title: "Add the brand yourself",
+    body: "Open Companies and create the brand you are working on. Its name and values fill {{slots}} on the Board. Chat can still answer a site id, a chat widget, or a member JSON before any company exists.",
+    screen: "company",
   },
   {
     id: "one",
     chapter: "Promptie",
-    time: "0:48",
+    time: "0:54",
     title: "Modify one prompt for a project",
     body: "Pick the company in the header. On the Board, one template fills its {{slots}} with that company’s values. To change the wording, open Chat, leave a single prompt checked, and click Modify this prompt. Copy it for the company, or Add to library and use it on the Board.",
     screen: "one",
@@ -102,17 +113,33 @@ const scenes: Scene[] = [
   {
     id: "merge",
     chapter: "Promptie",
-    time: "0:54",
+    time: "1:00",
     title: "Merge prompts, then use the result",
     body: "In Chat, check two or more prompts and click Merge selected prompts. You get one titled prompt. Add to library, open it on the Board, and copy it for the company. Brand details stay in {{slots}}.",
     screen: "merge",
   },
   {
+    id: "sheet",
+    chapter: "Promptie",
+    time: "1:06",
+    title: "Ask for a site id or chat widget",
+    body: "In Chat, ask for a site id or a chat widget by brand name. The answer is read from the live checkout sheet, so a brand added to the sheet later is included. If that name is not listed, Chat says so instead of inventing an id.",
+    screen: "sheet",
+  },
+  {
+    id: "member",
+    chapter: "Promptie",
+    time: "1:12",
+    title: "Build a member JSON",
+    body: "Open Member, or ask Chat for a member JSON. Give the project name and the live or Lovable link. Site id and widget come from the sheet when the brand is listed; otherwise type them or leave them empty. Colors are read from that link. Paste Drive links for the logo and favicon when you have them, then copy the JSON.",
+    screen: "member",
+  },
+  {
     id: "testing",
     chapter: "Promptie",
-    time: "1:00",
+    time: "1:18",
     title: "Run the test with a member email",
-    body: "Open Testing. Paste the live or Lovable link and the member email. The run walks the ShapeMeds path on that store and returns the order id plus that email. Export the pass or fail report as Excel or PDF.",
+    body: "Open Testing. Paste the live or Lovable link and the member email. The run walks the store path and returns the order id plus that email. GLOBAL100 is used only when Stripe is live. Export the pass or fail report as Excel or PDF.",
     screen: "testing",
   },
 ]
@@ -228,8 +255,11 @@ function ScreenView({ screen }: { screen: Screen }) {
   if (screen === "thanks") return <StoreThanks />
   if (screen === "legal") return <StoreLegal />
   if (screen === "signin") return <PromptieSignIn />
+  if (screen === "company") return <PromptieCompany />
   if (screen === "one") return <PromptieOne />
   if (screen === "merge") return <PromptieMerge />
+  if (screen === "sheet") return <PromptieSheet />
+  if (screen === "member") return <PromptieMember />
   return <PromptieTesting />
 }
 
@@ -382,6 +412,19 @@ function PromptieSignIn() {
   )
 }
 
+function PromptieCompany() {
+  return (
+    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
+      <p className="text-sm font-semibold">Companies</p>
+      <p className="mt-2 text-[10px] leading-4 text-[#5c6b64]">No sample brands. Add the one you are working on.</p>
+      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">New company</div>
+      <div className="mt-3 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-[10px] leading-4 text-[#5c6b64]">
+        Site id, chat widget, and member JSON still work with no company selected.
+      </div>
+    </div>
+  )
+}
+
 function PromptieOne() {
   return (
     <div className="flex h-full flex-col bg-[#14241e] text-white">
@@ -411,6 +454,37 @@ function PromptieMerge() {
       ))}
       <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Merge selected prompts</div>
       <div className="mt-3 rounded-xl border border-[#0e6b52] bg-[#e4f3ec] px-2 py-2 text-[11px] font-semibold text-[#0e6b52]">One prompt · Add to library</div>
+    </div>
+  )
+}
+
+function PromptieSheet() {
+  return (
+    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
+      <p className="text-[10px] font-semibold tracking-wide text-[#5c6b64] uppercase">Chat</p>
+      <div className="mt-2 ml-auto max-w-[92%] rounded-xl bg-[#e4f3ec] px-2 py-2 text-[10px] leading-4">
+        What is the site id and chat widget for this brand?
+      </div>
+      <div className="mt-2 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-[10px] leading-4">
+        <p className="font-semibold">From the live sheet</p>
+        <p className="mt-1">Site id 450</p>
+        <p>Widget 6a84be0c56eb8ca70386b9e8</p>
+      </div>
+    </div>
+  )
+}
+
+function PromptieMember() {
+  return (
+    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
+      <p className="text-sm font-semibold">Member JSON</p>
+      <div className="mt-2 rounded-lg border border-[#e3dacb] bg-white px-2 py-1.5 text-[10px]">Project name</div>
+      <div className="mt-1 rounded-lg border border-[#0e6b52] bg-white px-2 py-1.5 text-[10px]">https://brand.com</div>
+      <p className="mt-2 text-[10px] leading-4 text-[#5c6b64]">Site id and widget from the sheet. Colors from the link.</p>
+      <div className="mt-2 rounded-xl bg-[#14241e] px-2 py-2 font-mono text-[9px] leading-4 text-white">
+        <p>{`"siteId": "450"`}</p>
+        <p className="text-[#b6f5d4]">{`"primary": "#D96B2B"`}</p>
+      </div>
     </div>
   )
 }

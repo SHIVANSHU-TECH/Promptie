@@ -506,44 +506,6 @@ export function seedDatabase(): Database {
         updatedAt: now,
       },
     ],
-    companies: [
-      {
-        id: "co_northwind",
-        name: "Northwind",
-        updatedAt: now,
-        values: {
-          brand_name: "Northwind",
-          project_name: "northwind-app",
-          product_summary:
-            "B2B software sold as a subscription on the web. Buyers already have accounts.",
-          stack: "Next.js, TypeScript, Postgres",
-          stripe_mode: "test",
-          currency: "usd",
-          payment_methods: "card",
-          checkout_style: "Stripe Checkout, hosted session",
-          webhook_events:
-            "checkout.session.completed, invoice.paid, customer.subscription.updated, customer.subscription.deleted",
-          pap_url: "https://affiliates.northwind.example",
-          tracking_method: "PAP click id on the landing URL, stored on the account",
-          commission_event: "the first successful payment",
-          cookie_window: "30 days",
-          payment_provider: "Stripe",
-          purchase_type: "a subscription plan",
-          tax_handling: "tax exclusive, calculated on the server",
-          customer_fields: "name, work email, and billing country",
-        },
-      },
-      {
-        id: "co_harbor",
-        name: "Harbor",
-        updatedAt: now,
-        values: {
-          brand_name: "Harbor",
-          project_name: "harbor-billing",
-          product_summary: "A consumer shop that sells kits and a membership.",
-          stack: "Next.js, TypeScript, Postgres",
-        },
-      },
-    ],
+    companies: [],
   }
 }

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { addDoc, collection, doc, onSnapshot, orderBy, query, updateDoc } from "firebase/firestore"
 import { COMPANIES, db } from "@/lib/firebase"
 import { createId, fillPrompt } from "@/lib/prompt"
+import { asksForDirectory, asksForMemberJson } from "@/lib/sheet-directory"
 import { btnGhost, btnPrimary, field } from "@/lib/styles"
 import { useStore } from "@/lib/store"
 
@@ -22,6 +23,7 @@ type ChatMessage = {
   createdAt: number
   prompt: DraftPrompt | null
   savedTemplateId: string | null
+  memberJson: string | null
 }
 
 function stamp() {
@@ -82,6 +84,7 @@ export function BrandChat() {
               createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
               prompt,
               savedTemplateId: typeof data.savedTemplateId === "string" ? data.savedTemplateId : null,
+              memberJson: typeof data.memberJson === "string" ? data.memberJson : null,
             } satisfies ChatMessage
           })
           .filter((item): item is ChatMessage => item !== null),
@@ -122,7 +125,12 @@ export function BrandChat() {
 
   async function send(text?: string) {
     const content = (text ?? draft).trim()
-    if (!content || !company || pending) return
+    const sheetQuestion = asksForDirectory(content) || asksForMemberJson(content)
+    if (!content || pending) return
+    if (!company && !sheetQuestion) {
+      setError("Add a company before writing prompts. You can still ask for a site id, a chat widget, or a member JSON.")
+      return
+    }
     if (content.startsWith("Modify the one selected") && selectedIds.length !== 1) {
       setError("Check one prompt, then modify it.")
       return
@@ -134,6 +142,12 @@ export function BrandChat() {
     setDraft("")
     setPending(true)
     setError(null)
+    if (!company) {
+      setMessages((current) => [
+        ...current,
+        { id: createId("msg"), role: "user", content, createdAt: stamp(), prompt: null, savedTemplateId: null, memberJson: null },
+      ])
+    }
     const history = [
       ...messages.map((item) => ({
         role: item.role,
@@ -148,20 +162,22 @@ export function BrandChat() {
     const authoring = /^(Modify the one selected|Combine the selected|Write a new reusable prompt)/.test(content)
     const focus = modifying ? chosen[0] : template
     try {
-      await addDoc(collection(db, COMPANIES, company.id, "messages"), {
-        role: "user",
-        content,
-        createdAt: stamp(),
-      })
+      if (company) {
+        await addDoc(collection(db, COMPANIES, company.id, "messages"), {
+          role: "user",
+          content,
+          createdAt: stamp(),
+        })
+      }
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyName: company.name,
-          values: company.values,
+          companyName: company?.name ?? "",
+          values: company?.values ?? {},
           templateTitle: focus?.title ?? "",
           templateBody: focus?.body ?? "",
-          filledPrompt: authoring ? "" : focus ? fillPrompt(focus.body, company.values) : "",
+          filledPrompt: authoring ? "" : focus ? fillPrompt(focus.body, company?.values ?? {}) : "",
           templates: (modifying && focus ? [focus] : chosen).map((item) => ({
             title: item.title,
             category: item.category,
@@ -170,19 +186,33 @@ export function BrandChat() {
           messages: history,
         }),
       })
-      const payload = (await response.json()) as { reply?: string; prompt?: DraftPrompt | null; error?: string }
+      const payload = (await response.json()) as {
+        reply?: string
+        prompt?: DraftPrompt | null
+        memberJson?: string | null
+        error?: string
+      }
       if (!response.ok || !payload.reply) {
         throw new Error(payload.error || "Groq could not answer.")
       }
       if (authoring && !payload.prompt) {
         throw new Error("Groq answered without a prompt. Try again.")
       }
-      await addDoc(collection(db, COMPANIES, company.id, "messages"), {
-        role: "assistant",
+      const assistant = {
+        role: "assistant" as const,
         content: payload.reply,
         createdAt: stamp(),
         ...(payload.prompt ? { prompt: payload.prompt } : {}),
-      })
+        ...(payload.memberJson ? { memberJson: payload.memberJson } : {}),
+      }
+      if (company) {
+        await addDoc(collection(db, COMPANIES, company.id, "messages"), assistant)
+      } else {
+        setMessages((current) => [
+          ...current,
+          { id: createId("msg"), ...assistant, prompt: payload.prompt ?? null, savedTemplateId: null, memberJson: payload.memberJson ?? null },
+        ])
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Groq could not answer.")
     } finally {
@@ -208,20 +238,12 @@ export function BrandChat() {
     return <div className="grid h-full place-items-center bg-paper text-sm text-muted">Loading the library from Firebase…</div>
   }
 
-  if (!company) {
-    return (
-      <div className="grid h-full place-items-center bg-paper px-6 text-center text-sm leading-6 text-muted">
-        Add a company first. Chat stays with that brand.
-      </div>
-    )
-  }
-
   return (
     <div className="flex h-full min-h-0 bg-paper">
       <aside className="hidden w-72 shrink-0 flex-col border-r border-line bg-rail lg:flex">
         <div className="border-b border-line p-4">
           <p className="text-xs font-medium tracking-wide text-muted uppercase">Brand</p>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight">{company.name}</h1>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">{company?.name ?? "No company yet"}</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
             {template ? `Open prompt: ${template.title}` : "No prompt is open on the board."}
           </p>
@@ -292,11 +314,24 @@ export function BrandChat() {
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
             {messages.length === 0 ? (
               <div className="rounded-lg border border-line bg-card px-4 py-4">
-                <p className="text-sm font-medium">Chat with {company.name}</p>
+                <p className="text-sm font-medium">{company ? `Chat with ${company.name}` : "Start without a company"}</p>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Check one prompt and modify it for this project, or check several and merge them into one. Add the
-                  result to the library, then open it on the Board and copy it for this company.
+                  {company
+                    ? "Check one prompt to modify it, or two or more to merge them. You can also ask for a site id, a chat widget, or a member JSON."
+                    : "A company is only needed for prompts. Site id, chat widget, and member JSON work from here."}
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className={btnGhost} onClick={() => setDraft("What is the site id and chat widget for ")}>
+                    Site id and widget
+                  </button>
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => setDraft("Create a member json for PROJECT_NAME https://")}
+                  >
+                    Member JSON
+                  </button>
+                </div>
               </div>
             ) : null}
             {messages.map((message) => {
@@ -312,6 +347,23 @@ export function BrandChat() {
                     {message.role === "user" ? "You" : "Groq"}
                   </p>
                   <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.memberJson ? (
+                    <div className="mt-3 overflow-hidden rounded-lg bg-prompt text-prompt-text">
+                      <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                        <p className="text-xs font-medium text-white/70">member.json</p>
+                        <button
+                          type="button"
+                          className="rounded-md bg-white px-2.5 py-1.5 text-xs font-medium text-ink"
+                          onClick={() => void copyText(`${message.id}:json`, message.memberJson || "")}
+                        >
+                          {copiedKey === `${message.id}:json` ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <pre className="max-h-72 overflow-auto px-3 py-3 font-mono text-xs leading-5 whitespace-pre-wrap">
+                        {message.memberJson}
+                      </pre>
+                    </div>
+                  ) : null}
                   {prompt ? (
                     <div className="mt-3 overflow-hidden rounded-lg bg-prompt text-prompt-text">
                       <div className="grid gap-2 border-b border-white/10 px-3 py-3 sm:grid-cols-2">
@@ -358,9 +410,9 @@ export function BrandChat() {
                         <button
                           type="button"
                           className="rounded-md border border-white/20 px-2.5 py-1.5 text-xs font-medium text-white"
-                          onClick={() => void copyText(`${message.id}:filled`, fillPrompt(prompt.body, company.values))}
+                          onClick={() => void copyText(`${message.id}:filled`, fillPrompt(prompt.body, company?.values ?? {}))}
                         >
-                          {copiedKey === `${message.id}:filled` ? "Copied" : `Copy for ${company.name}`}
+                          {copiedKey === `${message.id}:filled` ? "Copied" : `Copy for ${company?.name ?? "brand"}`}
                         </button>
                         {message.savedTemplateId ? (
                           <Link href={`/templates/${message.savedTemplateId}`} className="text-xs text-slot-fill underline">
@@ -381,7 +433,7 @@ export function BrandChat() {
                 </article>
               )
             })}
-            {pending ? <p className="text-sm text-muted">Groq is writing…</p> : null}
+            {pending ? <p className="text-sm text-muted">Working…</p> : null}
             {error ? <p className="text-sm text-warn">{error}</p> : null}
             <div ref={bottomRef} />
           </div>
@@ -395,12 +447,12 @@ export function BrandChat() {
         >
           <div className="mx-auto flex max-w-3xl items-end gap-3 px-4 py-3">
             <label className="min-w-0 flex-1">
-              <span className="sr-only">Message {company.name}</span>
+              <span className="sr-only">Message</span>
               <textarea
                 className={`${field} min-h-12 resize-y`}
                 value={draft}
                 rows={2}
-                placeholder={`Enhance, combine, or ask about ${company.name}`}
+                placeholder={company ? `Ask about ${company.name}, a site id, or a member JSON` : "Ask for a site id, chat widget, or member JSON"}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {

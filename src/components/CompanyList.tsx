@@ -39,7 +39,16 @@ export function CompanyList() {
         </div>
 
         {ordered.length === 0 ? (
-          <p className="mt-10 text-sm text-muted">No companies yet.</p>
+          <div className="mt-8 rounded-lg border border-line bg-card px-4 py-5">
+            <p className="text-sm font-medium">Add the brand you are working on</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-muted">
+              Promptie does not start with sample companies. Create one here, then use it on the Board and in Chat.
+              Looking up a site id, a chat widget, or a member JSON does not need a company.
+            </p>
+            <Link href="/companies/new" className={`${btnPrimary} mt-4 inline-flex`}>
+              New company
+            </Link>
+          </div>
         ) : (
           <ul className="mt-8 divide-y divide-line rounded-lg border border-line bg-card">
             {ordered.map((company) => {

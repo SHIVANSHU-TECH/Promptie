@@ -44,7 +44,7 @@ export function UserGuide({ tone = "header" }: { tone?: "header" | "card" }) {
                   How the flow works
                 </h2>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-                  A short walkthrough of the ShapeMeds store, then how Promptie modifies one prompt, merges several, and runs the same test with your member email.
+                  ShapeMeds shows the store path the tester walks. After that: add your own company, modify or merge prompts, look up a site id and chat widget, build a member JSON, then run the test with a member email.
                 </p>
               </div>
               <button
