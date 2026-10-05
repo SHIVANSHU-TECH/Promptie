@@ -129,6 +129,8 @@ async function serverlessBrowser() {
 }
 
 export class BrowserRun {
+  private layout = { width: 1280, height: 800, mobile: false }
+
   private constructor(
     private process: ChildProcess,
     private profile: string,
@@ -199,19 +201,53 @@ export class BrowserRun {
     const shot = await this.page.send<{ data?: string }>("Page.captureScreenshot", {
       format: "jpeg",
       quality: 42,
-      fromSurface: true,
       captureBeyondViewport: false,
+      clip: {
+        x: 0,
+        y: 0,
+        width: this.layout.width,
+        height: this.layout.height,
+        scale: 1,
+      },
     })
     return shot.data || ""
   }
 
+  private async settle() {
+    await this.page
+      .evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))`)
+      .catch(() => undefined)
+  }
+
   async viewport(width: number, height: number, mobile: boolean) {
+    this.layout = { width, height, mobile }
     await this.page.send("Emulation.setDeviceMetricsOverride", {
       width,
       height,
       deviceScaleFactor: 1,
       mobile,
     })
+  }
+
+  async captureLayouts() {
+    const previous = { ...this.layout }
+    let phone = ""
+    let laptop = ""
+    try {
+      await this.viewport(390, 844, true)
+      await this.settle()
+      phone = await this.shot()
+      await this.viewport(1280, 800, false)
+      await this.settle()
+      laptop = await this.shot()
+    } finally {
+      const same =
+        this.layout.width === previous.width &&
+        this.layout.height === previous.height &&
+        this.layout.mobile === previous.mobile
+      if (!same) await this.viewport(previous.width, previous.height, previous.mobile)
+    }
+    return { phone, laptop }
   }
 
   async close() {

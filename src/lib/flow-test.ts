@@ -42,7 +42,7 @@ function check(id: string, name: string, ok: boolean, detail: string): FlowCheck
   return { id, name, status: ok ? "pass" : "fail", detail }
 }
 
-export type FlowFrame = { image: string; label: string }
+export type FlowFrame = { phone: string; laptop: string; label: string }
 
 export async function runFlowTest(
   rawUrl: string,
@@ -75,8 +75,8 @@ export async function runFlowTest(
     if (!onFrame || snapping || closed) return
     snapping = true
     try {
-      const image = await browser.shot()
-      if (image && !closed) onFrame({ image, label })
+      const layouts = await browser.captureLayouts()
+      if ((layouts.phone || layouts.laptop) && !closed) onFrame({ ...layouts, label })
     } catch {
       /* the page is moving between steps */
     } finally {

@@ -13,7 +13,8 @@ export function FlowTest() {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<FlowReport | null>(null)
-  const [frame, setFrame] = useState("")
+  const [phoneFrame, setPhoneFrame] = useState("")
+  const [laptopFrame, setLaptopFrame] = useState("")
   const [step, setStep] = useState("")
   const [device, setDevice] = useState<"phone" | "laptop">("phone")
   const [full, setFull] = useState(false)
@@ -41,7 +42,8 @@ export function FlowTest() {
     setPending(true)
     setError(null)
     setReport(null)
-    setFrame("")
+    setPhoneFrame("")
+    setLaptopFrame("")
     setStep("Starting the browser")
     try {
       const response = await fetch("/api/flow-test", {
@@ -70,12 +72,17 @@ export function FlowTest() {
           const event = JSON.parse(line) as {
             type?: string
             image?: string
+            phone?: string
+            laptop?: string
             label?: string
             error?: string
             report?: FlowReport
           }
           if (event.type === "frame") {
-            if (event.image) setFrame(`data:image/jpeg;base64,${event.image}`)
+            const phoneShot = event.phone || event.image || ""
+            const laptopShot = event.laptop || event.image || ""
+            if (phoneShot) setPhoneFrame(`data:image/jpeg;base64,${phoneShot}`)
+            if (laptopShot) setLaptopFrame(`data:image/jpeg;base64,${laptopShot}`)
             if (event.label) setStep(event.label)
           } else if (event.type === "report" && event.report) {
             receivedReport = true
@@ -191,7 +198,7 @@ export function FlowTest() {
               {full ? "Exit full screen" : "Full screen"}
             </button>
           </div>
-          <WatchFrame device={device} full={full} frame={frame} pending={pending} />
+          <WatchFrame device={device} full={full} frame={device === "phone" ? phoneFrame : laptopFrame} pending={pending} />
           <p className="mt-3 text-center text-xs font-medium tracking-wide text-muted uppercase">
             {step || "Watch the checkout"}
           </p>
@@ -280,7 +287,7 @@ function WatchFrame({
   const picture = frame ? (
     // The frame is a live JPEG from the checkout browser.
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={frame} alt="" className="h-full w-full object-contain object-top" />
+    <img src={frame} alt="" className="h-full w-full object-cover object-top" />
   ) : (
     <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-muted">
       {pending ? "Opening the store…" : "The view appears here while the test runs."}
@@ -291,7 +298,7 @@ function WatchFrame({
     return (
       <div className={full ? "h-[min(88vh,820px)]" : "w-[220px]"}>
         <div className="h-full rounded-[1.7rem] bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
-          <div className={`overflow-hidden rounded-[1.3rem] bg-[#f6f1e6] ${full ? "mx-auto aspect-[9/16] h-full" : "aspect-[9/16]"}`}>
+          <div className={`overflow-hidden rounded-[1.3rem] bg-[#f6f1e6] ${full ? "mx-auto aspect-[390/844] h-full" : "aspect-[390/844]"}`}>
             {picture}
           </div>
         </div>

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       send({ type: "frame", label: "Starting the browser" })
       try {
         const report = await runFlowTest(url, email, (frame) => {
-          send({ type: "frame", image: frame.image, label: frame.label })
+          send({ type: "frame", phone: frame.phone, laptop: frame.laptop, label: frame.label })
         })
         send({ type: "report", report })
       } catch (error) {
