@@ -153,6 +153,7 @@ export class BrowserRun {
       const hosted = await serverlessBrowser()
       executable = hosted.executable
       args = [
+        "--disable-dev-shm-usage",
         ...hosted.args.map((arg) => (arg === "--headless='shell'" ? "--headless=shell" : arg)),
         `--remote-debugging-port=${port}`,
         `--user-data-dir=${profile}`,
