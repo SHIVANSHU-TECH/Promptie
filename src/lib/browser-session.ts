@@ -161,7 +161,13 @@ export class BrowserRun {
     }
     if (!executable) throw new Error("Chrome or Edge is required to run the checkout flow.")
 
-    const child = spawn(executable, args, { stdio: "ignore" })
+    let output = ""
+    const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"] })
+    const remember = (chunk: Buffer | string) => {
+      output = `${output}${chunk.toString()}`.slice(-1200)
+    }
+    child.stdout?.on("data", remember)
+    child.stderr?.on("data", remember)
     try {
       const pageSocket = await waitForPage(port)
       const page = await PageSession.connect(pageSocket)
@@ -171,7 +177,9 @@ export class BrowserRun {
     } catch (error) {
       child.kill()
       await rm(profile, { recursive: true, force: true }).catch(() => undefined)
-      throw error
+      const detail = output.trim().replace(/\s+/g, " ").slice(-280)
+      const message = error instanceof Error ? error.message : "The browser did not open a page."
+      throw new Error(detail ? `${message} ${detail}` : message)
     }
   }
 
@@ -212,20 +220,36 @@ export class BrowserRun {
   }
 }
 
+async function listedPages(port: number) {
+  const response = await fetch(`http://127.0.0.1:${port}/json/list`)
+  if (!response.ok) return []
+  return (await response.json()) as { id?: string; type: string; webSocketDebuggerUrl: string }[]
+}
+
 async function waitForPage(port: number) {
   const started = Date.now()
-  while (Date.now() - started < 15000) {
+  let opened = false
+  while (Date.now() - started < 20000) {
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/json/list`)
-      if (response.ok) {
-        const pages = (await response.json()) as { type: string; webSocketDebuggerUrl: string }[]
-        const page = pages.find((item) => item.type === "page")
-        if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl
+      const pages = await listedPages(port)
+      const page = pages.find((item) => item.type === "page" && item.webSocketDebuggerUrl)
+      if (page) return page.webSocketDebuggerUrl
+      if (!opened) {
+        const version = await fetch(`http://127.0.0.1:${port}/json/version`)
+        if (version.ok) {
+          const browser = (await version.json()) as { webSocketDebuggerUrl?: string }
+          if (browser.webSocketDebuggerUrl) {
+            const session = await PageSession.connect(browser.webSocketDebuggerUrl)
+            await session.send("Target.createTarget", { url: "about:blank" })
+            session.close()
+            opened = true
+          }
+        }
       }
     } catch {
       /* browser is still starting */
     }
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 250))
   }
   throw new Error("The browser did not open a page.")
 }
