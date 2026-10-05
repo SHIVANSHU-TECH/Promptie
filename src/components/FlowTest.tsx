@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { FlowReport } from "@/lib/flow-report"
 import { reportPassed } from "@/lib/flow-report"
 import { btnGhost, btnPrimary, field } from "@/lib/styles"
@@ -15,7 +15,27 @@ export function FlowTest() {
   const [report, setReport] = useState<FlowReport | null>(null)
   const [frame, setFrame] = useState("")
   const [step, setStep] = useState("")
+  const [device, setDevice] = useState<"phone" | "laptop">("phone")
+  const [full, setFull] = useState(false)
+  const stageRef = useRef<HTMLDivElement>(null)
   const emailReady = emailPattern.test(email.trim())
+
+  useEffect(() => {
+    const onChange = () => setFull(document.fullscreenElement === stageRef.current)
+    document.addEventListener("fullscreenchange", onChange)
+    return () => document.removeEventListener("fullscreenchange", onChange)
+  }, [])
+
+  async function toggleFull() {
+    const stage = stageRef.current
+    if (!stage) return
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen()
+      else await stage.requestFullscreen()
+    } catch {
+      /* the browser blocked full screen */
+    }
+  }
 
   async function runTest() {
     setPending(true)
@@ -149,20 +169,29 @@ export function FlowTest() {
             </button>
           </div>
         </form>
-        <div className="mt-6 flex flex-col items-center">
-          <div className="w-[220px] rounded-[1.7rem] bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
-            <div className="relative aspect-[9/16] overflow-hidden rounded-[1.3rem] bg-[#f6f1e6]">
-              {frame ? (
-                // The frame is a live JPEG from the checkout browser.
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={frame} alt="" className="h-full w-full object-contain object-top" />
-              ) : (
-                <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-muted">
-                  {pending ? "Opening the store…" : "The 9:16 view appears here while the test runs."}
-                </div>
-              )}
+        <div
+          ref={stageRef}
+          className={`mt-6 flex flex-col items-center ${full ? "h-full justify-center bg-paper px-6" : ""}`}
+        >
+          <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+            <div className="flex rounded-md border border-line bg-card p-0.5">
+              {(["phone", "laptop"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={device === option}
+                  className={`rounded px-3 py-1.5 text-sm font-medium ${device === option ? "bg-accent text-white" : "text-ink hover:bg-rail"}`}
+                  onClick={() => setDevice(option)}
+                >
+                  {option === "phone" ? "Phone" : "Laptop"}
+                </button>
+              ))}
             </div>
+            <button type="button" className={btnGhost} onClick={() => void toggleFull()}>
+              {full ? "Exit full screen" : "Full screen"}
+            </button>
           </div>
+          <WatchFrame device={device} full={full} frame={frame} pending={pending} />
           <p className="mt-3 text-center text-xs font-medium tracking-wide text-muted uppercase">
             {step || "Watch the checkout"}
           </p>
@@ -233,6 +262,52 @@ export function FlowTest() {
           </section>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+function WatchFrame({
+  device,
+  full,
+  frame,
+  pending,
+}: {
+  device: "phone" | "laptop"
+  full: boolean
+  frame: string
+  pending: boolean
+}) {
+  const picture = frame ? (
+    // The frame is a live JPEG from the checkout browser.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={frame} alt="" className="h-full w-full object-contain object-top" />
+  ) : (
+    <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-muted">
+      {pending ? "Opening the store…" : "The view appears here while the test runs."}
+    </div>
+  )
+
+  if (device === "phone") {
+    return (
+      <div className={full ? "h-[min(88vh,820px)]" : "w-[220px]"}>
+        <div className="h-full rounded-[1.7rem] bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
+          <div className={`overflow-hidden rounded-[1.3rem] bg-[#f6f1e6] ${full ? "mx-auto aspect-[9/16] h-full" : "aspect-[9/16]"}`}>
+            {picture}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={full ? "w-[min(96vw,1200px)]" : "w-full max-w-[640px]"}>
+      <div className="rounded-xl bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
+        <div className={`overflow-hidden rounded-md bg-[#f6f1e6] ${full ? "aspect-[16/10] max-h-[78vh]" : "aspect-[16/10]"}`}>
+          {picture}
+        </div>
+      </div>
+      <div className="mx-auto h-2 w-28 rounded-b-md bg-ink/70" />
+      <div className="mx-auto h-1.5 w-44 rounded-b-lg bg-ink" />
     </div>
   )
 }
