@@ -31,6 +31,10 @@ export function MemberJsonForm() {
       void fetch(`/api/sheet?q=${encodeURIComponent(query)}`)
         .then((response) => response.json())
         .then((payload: { matches?: Match[]; error?: string }) => {
+          if (payload.error) {
+            setSheetNote(payload.error)
+            return
+          }
           const exact = payload.matches?.filter((item) => item.name.toLowerCase() === query.toLowerCase()) ?? []
           const match = exact.length === 1 ? exact[0] : payload.matches?.length === 1 ? payload.matches[0] : null
           if (!match) {

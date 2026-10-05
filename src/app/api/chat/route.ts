@@ -4,6 +4,7 @@ import { createMemberConfig, memberJson, memberRequestFromText } from "@/lib/mem
 import { asksForDirectory, asksForMemberJson, formatDirectory, loadDirectory, searchDirectory } from "@/lib/sheet-directory"
 
 export const runtime = "nodejs"
+export const maxDuration = 60
 
 type ChatTurn = { role: "user" | "assistant"; content: string }
 
@@ -147,6 +148,18 @@ function wantsDraft(turns: ChatTurn[]) {
   return /\b(enhance|modify|combin|merge|write a new|library prompt|reusable prompt)\b/i.test(last)
 }
 
+function modelName() {
+  return process.env.GROQ_MODEL || "openai/gpt-oss-20b"
+}
+
+function answerText(message: { content?: string | null; reasoning?: string | null } | undefined) {
+  const content = message?.content?.trim() ?? ""
+  if (content) return content
+  const reasoning = message?.reasoning?.trim() ?? ""
+  if (reasoning.startsWith("{") || reasoning.includes('"reply"')) return reasoning
+  return ""
+}
+
 export async function POST(request: Request) {
   let body: ChatBody
   try {
@@ -187,7 +200,11 @@ export async function POST(request: Request) {
       const matches = searchDirectory(await loadDirectory(), `${last}\n${companyName}`)
       return NextResponse.json({ reply: formatDirectory(matches), prompt: null, memberJson: null })
     } catch {
-      return NextResponse.json({ error: "The checkout sheet could not be read." }, { status: 502 })
+      return NextResponse.json({
+        reply: "The checkout sheet could not be read. Try again in a moment.",
+        prompt: null,
+        memberJson: null,
+      })
     }
   }
 
@@ -214,44 +231,48 @@ export async function POST(request: Request) {
     sheetContext = ""
   }
 
-  try {
-    const completion = await groq.chat.completions.create({
-      model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
-      temperature: 0.4,
-      max_tokens: 4096,
-      messages: [
-        {
-          role: "system",
-          content: brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library, sheetContext),
-        },
-        ...turns,
-      ],
-    })
-    const text = completion.choices[0]?.message?.content?.trim()
-    if (!text) {
-      return NextResponse.json({ error: "Groq returned an empty answer." }, { status: 502 })
+  const model = modelName()
+  const reasoning = /gpt-oss/i.test(model) ? { reasoning_effort: "low" as const, reasoning_format: "parsed" as const } : {}
+  const brief = brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library, sheetContext)
+
+  async function complete(messages: { role: "system" | "user" | "assistant"; content: string }[]) {
+    let last: unknown
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const completion = await groq.chat.completions.create({
+          model,
+          temperature: attempt === 0 ? 0.4 : 0.2,
+          max_tokens: 4096,
+          ...reasoning,
+          messages,
+        })
+        const text = answerText(completion.choices[0]?.message)
+        if (text) return text
+        last = new Error("empty")
+      } catch (error) {
+        last = error
+      }
     }
+    throw last instanceof Error ? last : new Error("Groq could not answer.")
+  }
+
+  try {
+    const text = await complete([
+      { role: "system", content: brief },
+      ...turns,
+    ])
     let parsed = parseModel(text)
     if (!parsed.prompt && wantsDraft(turns)) {
-      const retry = await groq.chat.completions.create({
-        model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
-        temperature: 0.3,
-        max_tokens: 4096,
-        messages: [
-          {
-            role: "system",
-            content: brandBrief(companyName, values, templateTitle, templateBody, filledPrompt, library, sheetContext),
-          },
-          ...turns,
-          { role: "assistant", content: text.slice(0, 6000) },
-          {
-            role: "user",
-            content:
-              'Return JSON only. Set "prompt" to an object with title, category, description, and body. Keep {{slot}} placeholders in body. Do not put the full prompt in reply.',
-          },
-        ],
-      })
-      const retried = retry.choices[0]?.message?.content?.trim()
+      const retried = await complete([
+        { role: "system", content: brief },
+        ...turns,
+        { role: "assistant", content: text.slice(0, 6000) },
+        {
+          role: "user",
+          content:
+            'Return JSON only. Set "prompt" to an object with title, category, description, and body. Keep {{slot}} placeholders in body. Do not put the full prompt in reply.',
+        },
+      ]).catch(() => "")
       if (retried) {
         const second = parseModel(retried)
         if (second.prompt) parsed = second
@@ -260,6 +281,9 @@ export async function POST(request: Request) {
     return NextResponse.json(parsed)
   } catch (error) {
     console.error("Groq chat failed", error)
-    return NextResponse.json({ error: "Groq could not answer. Try again." }, { status: 502 })
+    return NextResponse.json({
+      reply: "Groq could not answer. Try again.",
+      prompt: null,
+    })
   }
 }

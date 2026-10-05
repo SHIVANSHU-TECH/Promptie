@@ -1,6 +1,9 @@
 const SHEET_ID = "1yUYM2BgSS5X30VY-LgcSCCLRo69o7cG46Uo_OxefQBk"
 const SHEET_GID = "2132975865"
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
+const SHEET_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`,
+]
 const CACHE_MS = 60_000
 
 export type DirectoryRow = {
@@ -86,11 +89,31 @@ function widgetId(script: string) {
   return script.match(/data-widget-id=["']([^"']+)["']/i)?.[1] ?? ""
 }
 
+async function fetchSheetCsv() {
+  for (const url of SHEET_URLS) {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        redirect: "follow",
+        signal: AbortSignal.timeout(4000),
+        headers: {
+          Accept: "text/csv,text/plain;q=0.9,*/*;q=0.8",
+          "User-Agent": "Mozilla/5.0 (compatible; Promptie/1.0)",
+        },
+      })
+      if (!response.ok) continue
+      const text = await response.text()
+      if (/site_id/i.test(text.slice(0, 800))) return text
+    } catch {
+      continue
+    }
+  }
+  throw new Error("The checkout sheet could not be read.")
+}
+
 export async function loadDirectory() {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.rows
-  const response = await fetch(SHEET_URL, { cache: "no-store" })
-  if (!response.ok) throw new Error("The checkout sheet could not be read.")
-  const table = parseCsv(await response.text())
+  const table = parseCsv(await fetchSheetCsv())
   const header = table[0]?.map((cell) => cell.trim().toLowerCase()) ?? []
   const siteCol = header.indexOf("site_id")
   const nameCol = header.findIndex((cell) => cell === "subaccount")

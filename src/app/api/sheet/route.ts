@@ -18,6 +18,10 @@ export async function GET(request: Request) {
       summary: query ? formatDirectory(matches) : "",
     })
   } catch {
-    return NextResponse.json({ error: "The checkout sheet could not be read." }, { status: 502 })
+    return NextResponse.json({
+      matches: [],
+      summary: "",
+      error: "The checkout sheet could not be read. Try again in a moment.",
+    })
   }
 }
