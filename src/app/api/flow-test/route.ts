@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server"
 import { runFlowTest } from "@/lib/flow-test"
 
 export const runtime = "nodejs"
-export const maxDuration = 120
+export const maxDuration = 300
 
 export async function POST(request: Request) {
   let url = ""
@@ -12,16 +11,36 @@ export async function POST(request: Request) {
     url = typeof body.url === "string" ? body.url : ""
     email = typeof body.email === "string" ? body.email : ""
   } catch {
-    return NextResponse.json({ error: "Send the store link as JSON." }, { status: 400 })
+    return Response.json({ error: "Send the store link as JSON." }, { status: 400 })
   }
-  if (!url.trim()) return NextResponse.json({ error: "Enter the Lovable or live link." }, { status: 400 })
-  if (!email.trim()) return NextResponse.json({ error: "Enter the member email." }, { status: 400 })
+  if (!url.trim()) return Response.json({ error: "Enter the Lovable or live link." }, { status: 400 })
+  if (!email.trim()) return Response.json({ error: "Enter the member email." }, { status: 400 })
 
-  try {
-    const report = await runFlowTest(url, email)
-    return NextResponse.json(report)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "The flow test could not finish."
-    return NextResponse.json({ error: message }, { status: 502 })
-  }
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (payload: unknown) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`))
+      }
+      send({ type: "frame", label: "Starting the browser" })
+      try {
+        const report = await runFlowTest(url, email, (frame) => {
+          send({ type: "frame", image: frame.image, label: frame.label })
+        })
+        send({ type: "report", report })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The flow test could not finish."
+        send({ type: "error", error: message })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+    },
+  })
 }

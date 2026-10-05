@@ -12,6 +12,7 @@ type Pending = {
 export class PageSession {
   private nextId = 0
   private pending = new Map<number, Pending>()
+  private queue: Promise<unknown> = Promise.resolve()
 
   private constructor(private ws: WebSocket) {
     ws.addEventListener("message", (event) => {
@@ -39,6 +40,15 @@ export class PageSession {
   }
 
   send<T>(method: string, params: Record<string, unknown> = {}) {
+    const task = this.queue.then(() => this.dispatch<T>(method, params))
+    this.queue = task.then(
+      () => undefined,
+      () => undefined,
+    )
+    return task
+  }
+
+  private dispatch<T>(method: string, params: Record<string, unknown>) {
     const id = ++this.nextId
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject })
@@ -74,14 +84,48 @@ function freePort() {
   })
 }
 
+function envValue(name: string) {
+  const value = process.env[name]
+  return typeof value === "string" ? value : ""
+}
+
 function browserCandidates() {
-  const roots = [process.env.LOCALAPPDATA, process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"]].filter(
-    (value): value is string => Boolean(value),
-  )
-  return [
-    ...roots.map((root) => join(root, "Google", "Chrome", "Application", "chrome.exe")),
-    ...roots.map((root) => join(root, "Microsoft", "Edge", "Application", "msedge.exe")),
+  const roots = [
+    envValue("LOCALAPPDATA"),
+    envValue("PROGRAMFILES"),
+    envValue("ProgramFiles"),
+    envValue("PROGRAMFILES(X86)"),
+    envValue("ProgramFiles(x86)"),
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+  ].filter(Boolean)
+  const names = [
+    ["Google", "Chrome", "Application", "chrome.exe"],
+    ["Microsoft", "Edge", "Application", "msedge.exe"],
   ]
+  return [...new Set(roots.flatMap((root) => names.map((parts) => join(root, ...parts))))]
+}
+
+async function findExecutable() {
+  for (const candidate of browserCandidates()) {
+    try {
+      await access(candidate)
+      return candidate
+    } catch {
+      /* try the next installed browser */
+    }
+  }
+  return ""
+}
+
+async function serverlessBrowser() {
+  const chromium = (await import("@sparticuz/chromium")).default
+  chromium.setGraphicsMode = false
+  const executable = await chromium.executablePath()
+  const args = chromium.args.filter(
+    (arg) => !arg.startsWith("--remote-debugging-port") && !arg.startsWith("--user-data-dir"),
+  )
+  return { executable, args }
 }
 
 export class BrowserRun {
@@ -92,37 +136,47 @@ export class BrowserRun {
   ) {}
 
   static async launch() {
-    let executable = ""
-    for (const candidate of browserCandidates()) {
+    const port = await freePort()
+    const profile = await mkdtemp(join(tmpdir(), "promptie-flow-"))
+    const local = await findExecutable()
+    let executable = local
+    let args = [
+      "--headless=new",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profile}`,
+      "about:blank",
+    ]
+    if (!executable) {
       try {
-        await access(candidate)
-        executable = candidate
-        break
+        const hosted = await serverlessBrowser()
+        executable = hosted.executable
+        args = [
+          ...hosted.args,
+          `--remote-debugging-port=${port}`,
+          `--user-data-dir=${profile}`,
+          "about:blank",
+        ]
       } catch {
-        /* try the next installed browser */
+        executable = ""
       }
     }
     if (!executable) throw new Error("Chrome or Edge is required to run the checkout flow.")
 
-    const port = await freePort()
-    const profile = await mkdtemp(join(tmpdir(), "promptie-flow-"))
-    const child = spawn(
-      executable,
-      [
-        "--headless=new",
-        "--disable-gpu",
-        "--no-first-run",
-        `--remote-debugging-port=${port}`,
-        `--user-data-dir=${profile}`,
-        "about:blank",
-      ],
-      { stdio: "ignore" },
-    )
-    const pageSocket = await waitForPage(port)
-    const page = await PageSession.connect(pageSocket)
-    await page.send("Page.enable")
-    await page.send("Runtime.enable")
-    return new BrowserRun(child, profile, page)
+    const child = spawn(executable, args, { stdio: "ignore" })
+    try {
+      const pageSocket = await waitForPage(port)
+      const page = await PageSession.connect(pageSocket)
+      await page.send("Page.enable")
+      await page.send("Runtime.enable")
+      return new BrowserRun(child, profile, page)
+    } catch (error) {
+      child.kill()
+      await rm(profile, { recursive: true, force: true }).catch(() => undefined)
+      throw error
+    }
   }
 
   async goto(url: string) {
@@ -134,6 +188,16 @@ export class BrowserRun {
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
     throw new Error(`The page did not finish loading: ${url}`)
+  }
+
+  async shot() {
+    const shot = await this.page.send<{ data?: string }>("Page.captureScreenshot", {
+      format: "jpeg",
+      quality: 42,
+      fromSurface: true,
+      captureBeyondViewport: false,
+    })
+    return shot.data || ""
   }
 
   async viewport(width: number, height: number, mobile: boolean) {

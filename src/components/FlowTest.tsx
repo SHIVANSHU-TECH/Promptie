@@ -13,20 +13,60 @@ export function FlowTest() {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<FlowReport | null>(null)
+  const [frame, setFrame] = useState("")
+  const [step, setStep] = useState("")
   const emailReady = emailPattern.test(email.trim())
 
   async function runTest() {
     setPending(true)
     setError(null)
+    setReport(null)
+    setFrame("")
+    setStep("Starting the browser")
     try {
       const response = await fetch("/api/flow-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url, email: email.trim() }),
       })
-      const payload = (await response.json()) as FlowReport & { error?: string }
-      if (!response.ok) throw new Error(payload.error || "The flow test could not finish.")
-      setReport(payload)
+      const type = response.headers.get("content-type") || ""
+      if (type.includes("application/json")) {
+        const payload = (await response.json()) as { error?: string }
+        throw new Error(payload.error || "The flow test could not finish.")
+      }
+      if (!response.ok || !response.body) throw new Error("The flow test could not finish.")
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let receivedReport = false
+      while (true) {
+        const chunk = await reader.read()
+        if (chunk.done) break
+        buffer += decoder.decode(chunk.value, { stream: true })
+        const lines = buffer.split("\n")
+        buffer = lines.pop() || ""
+        for (const line of lines) {
+          if (!line.trim()) continue
+          const event = JSON.parse(line) as {
+            type?: string
+            image?: string
+            label?: string
+            error?: string
+            report?: FlowReport
+          }
+          if (event.type === "frame") {
+            if (event.image) setFrame(`data:image/jpeg;base64,${event.image}`)
+            if (event.label) setStep(event.label)
+          } else if (event.type === "report" && event.report) {
+            receivedReport = true
+            setReport(event.report)
+            setStep(event.report.orderId ? `Order ${event.report.orderId}` : "Finished")
+          } else if (event.type === "error") {
+            throw new Error(event.error || "The flow test could not finish.")
+          }
+        }
+      }
+      if (!receivedReport) throw new Error("The flow test stopped before the report.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "The flow test could not finish.")
     } finally {
@@ -109,6 +149,24 @@ export function FlowTest() {
             </button>
           </div>
         </form>
+        <div className="mt-6 flex flex-col items-center">
+          <div className="w-[220px] rounded-[1.7rem] bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
+            <div className="relative aspect-[9/16] overflow-hidden rounded-[1.3rem] bg-[#f6f1e6]">
+              {frame ? (
+                // The frame is a live JPEG from the checkout browser.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={frame} alt="" className="h-full w-full object-contain object-top" />
+              ) : (
+                <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-muted">
+                  {pending ? "Opening the store…" : "The 9:16 view appears here while the test runs."}
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="mt-3 text-center text-xs font-medium tracking-wide text-muted uppercase">
+            {step || "Watch the checkout"}
+          </p>
+        </div>
         {error ? <p className="mt-4 text-sm text-warn">{error}</p> : null}
         {report ? (
           <section className="mt-8 overflow-hidden rounded-lg border border-line bg-card">

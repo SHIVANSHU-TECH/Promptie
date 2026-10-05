@@ -42,7 +42,13 @@ function check(id: string, name: string, ok: boolean, detail: string): FlowCheck
   return { id, name, status: ok ? "pass" : "fail", detail }
 }
 
-export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<FlowReport> {
+export type FlowFrame = { image: string; label: string }
+
+export async function runFlowTest(
+  rawUrl: string,
+  memberEmail: string,
+  onFrame?: (frame: FlowFrame) => void,
+): Promise<FlowReport> {
   const url = publicUrl(rawUrl)
   const email = memberEmail.trim()
   if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
@@ -61,6 +67,30 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
   }
   const checks: FlowCheck[] = []
   const browser = await BrowserRun.launch()
+  let label = "Opening the store"
+  let snapping = false
+  let closed = false
+  const snap = async (next?: string) => {
+    if (next) label = next
+    if (!onFrame || snapping || closed) return
+    snapping = true
+    try {
+      const image = await browser.shot()
+      if (image && !closed) onFrame({ image, label })
+    } catch {
+      /* the page is moving between steps */
+    } finally {
+      snapping = false
+    }
+  }
+  const frames = setInterval(() => {
+    void snap()
+  }, 1600)
+  let stripeMode: FlowReport["stripeMode"] = "unknown"
+  let couponUsed = false
+  let orderId = ""
+
+  try {
   await browser.page.send("Page.addScriptToEvaluateOnNewDocument", {
     source: `(() => {
       sessionStorage.setItem("promptie-hook", "yes")
@@ -88,12 +118,10 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       }
     })()`,
   })
-  let stripeMode: FlowReport["stripeMode"] = "unknown"
-  let couponUsed = false
-  let orderId = ""
 
-  try {
     await browser.goto(url)
+    await browser.viewport(390, 844, true)
+    await snap("Store home")
     checks.push(check("open", "Open the store", true, url))
 
     checks.push(await responsive(browser, "home-mobile", "Home, phone width", 390, 844, true))
@@ -106,6 +134,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
     for (const link of products) {
       if (added >= 2) break
       await browser.goto(link)
+      await snap("Choosing a treatment")
       await sleep(700)
       if (!checkedProduct) {
         checks.push(await responsive(browser, "product-mobile", "Product page, phone width", 390, 844, true))
@@ -127,6 +156,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       ),
     )
 
+    await snap("Opening the cart")
     const cart = await openCart(browser)
     const cartCount = cart ? await cartItemCount(browser) : 0
     checks.push(
@@ -147,6 +177,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       consents += await acceptConsents(browser)
     }
 
+    await snap("Opening checkout")
     const checkout = cart ? await openCheckout(browser) : false
     checks.push(
       check(
@@ -162,6 +193,7 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
       await browser.viewport(1280, 800, false)
     }
 
+    await snap("Contact and shipping")
     const filled = checkout ? await fillCheckout(browser, buyer) : 0
     if (checkout) consents += await acceptConsents(browser)
     checks.push(
@@ -237,15 +269,20 @@ export async function runFlowTest(rawUrl: string, memberEmail: string): Promise<
     )
 
     if (checkout) {
+      await snap("Placing the order")
       const placed = await placeOrder(browser)
       orderId = placed.orderId
       checks.push(check("order", "Create the order", Boolean(orderId), orderId ? `Order id ${orderId}.` : placed.detail))
     }
     checks.push(check("email", "Member email", true, buyer.email))
 
+    await snap("Legal pages")
     await browser.goto(url)
     checks.push(...(await legalChecks(browser, policyDocs)))
+    await snap(orderId ? `Order ${orderId}` : "Finished")
   } finally {
+    closed = true
+    clearInterval(frames)
     await browser.close()
   }
 
