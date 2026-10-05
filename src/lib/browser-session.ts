@@ -150,18 +150,14 @@ export class BrowserRun {
       "about:blank",
     ]
     if (!executable) {
-      try {
-        const hosted = await serverlessBrowser()
-        executable = hosted.executable
-        args = [
-          ...hosted.args,
-          `--remote-debugging-port=${port}`,
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ]
-      } catch {
-        executable = ""
-      }
+      const hosted = await serverlessBrowser()
+      executable = hosted.executable
+      args = [
+        ...hosted.args.map((arg) => (arg === "--headless='shell'" ? "--headless=shell" : arg)),
+        `--remote-debugging-port=${port}`,
+        `--user-data-dir=${profile}`,
+        "about:blank",
+      ]
     }
     if (!executable) throw new Error("Chrome or Edge is required to run the checkout flow.")
 
