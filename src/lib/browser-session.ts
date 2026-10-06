@@ -16,7 +16,24 @@ export class PageSession {
 
   private constructor(private ws: WebSocket) {
     ws.addEventListener("message", (event) => {
-      const message = JSON.parse(String(event.data)) as {
+      void this.takeMessage(event.data)
+    })
+  }
+
+  private async takeMessage(data: unknown) {
+    try {
+      const text =
+        typeof data === "string"
+          ? data
+          : data instanceof ArrayBuffer
+            ? new TextDecoder().decode(data)
+            : ArrayBuffer.isView(data)
+              ? new TextDecoder().decode(data)
+              : data instanceof Blob
+                ? await data.text()
+                : ""
+      if (!text) return
+      const message = JSON.parse(text) as {
         id?: number
         result?: unknown
         error?: { message?: string }
@@ -27,7 +44,9 @@ export class PageSession {
       if (!waiter) return
       if (message.error) waiter.reject(new Error(message.error.message || "Browser command failed"))
       else waiter.resolve(message.result)
-    })
+    } catch {
+      /* ignore a browser frame that is not a command result */
+    }
   }
 
   static async connect(url: string) {
@@ -200,7 +219,7 @@ export class BrowserRun {
   async shot() {
     const shot = await this.page.send<{ data?: string }>("Page.captureScreenshot", {
       format: "jpeg",
-      quality: 42,
+      quality: 28,
       captureBeyondViewport: false,
       clip: {
         x: 0,
@@ -210,7 +229,7 @@ export class BrowserRun {
         scale: 1,
       },
     })
-    return shot.data || ""
+    return (shot.data || "").replace(/\s/g, "")
   }
 
   private async settle() {
@@ -260,7 +279,11 @@ export class BrowserRun {
 async function listedPages(port: number) {
   const response = await fetch(`http://127.0.0.1:${port}/json/list`)
   if (!response.ok) return []
-  return (await response.json()) as { id?: string; type: string; webSocketDebuggerUrl: string }[]
+  try {
+    return (await response.json()) as { id?: string; type: string; webSocketDebuggerUrl: string }[]
+  } catch {
+    return []
+  }
 }
 
 async function waitForPage(port: number) {

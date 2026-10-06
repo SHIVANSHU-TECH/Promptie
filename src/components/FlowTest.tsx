@@ -48,8 +48,13 @@ export function FlowTest() {
         body: JSON.stringify({ url }),
       })
       const type = response.headers.get("content-type") || ""
-      if (type.includes("application/json")) {
-        const payload = (await response.json()) as { error?: string }
+      if (type.includes("application/json") && !type.includes("ndjson")) {
+        let payload: { error?: string } = {}
+        try {
+          payload = (await response.json()) as { error?: string }
+        } catch {
+          throw new Error("The test could not start. Try again.")
+        }
         throw new Error(payload.error || "The flow test could not finish.")
       }
       if (!response.ok || !response.body) throw new Error("The flow test could not finish.")
@@ -65,7 +70,7 @@ export function FlowTest() {
         buffer = lines.pop() || ""
         for (const line of lines) {
           if (!line.trim()) continue
-          const event = JSON.parse(line) as {
+          let event: {
             type?: string
             image?: string
             phone?: string
@@ -73,6 +78,11 @@ export function FlowTest() {
             label?: string
             error?: string
             report?: FlowReport
+          }
+          try {
+            event = JSON.parse(line) as typeof event
+          } catch {
+            continue
           }
           if (event.type === "frame") {
             const phoneShot = event.phone || event.image || ""
@@ -89,7 +99,7 @@ export function FlowTest() {
           }
         }
       }
-      if (!receivedReport) throw new Error("The flow test stopped before the report.")
+      if (!receivedReport) throw new Error("The test connection closed before the report was ready. Run it again.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "The flow test could not finish.")
     } finally {
