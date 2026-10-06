@@ -45,8 +45,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={link.href}
                   href={link.href}
                   aria-current={current ? "page" : undefined}
-                  className={`rounded-md px-2.5 py-1.5 ${
-                    current ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+                  className={`rounded-lg px-2.5 py-1.5 ${
+                    current ? "bg-accent text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   {link.label}
