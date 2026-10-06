@@ -29,7 +29,7 @@ export function UserGuide({ tone = "header" }: { tone?: "header" | "card" }) {
         How to use
       </button>
       {open ? (
-        <div className="fixed inset-0 z-50 grid place-items-end bg-ink/55 px-3 py-3 sm:place-items-center sm:px-6 sm:py-8" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-end bg-inverse/55 px-3 py-3 sm:place-items-center sm:px-6 sm:py-8" onClick={() => setOpen(false)}>
           <div
             role="dialog"
             aria-modal="true"

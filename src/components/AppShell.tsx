@@ -31,10 +31,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-white/10 bg-ink text-white">
+      <header className="shrink-0 border-b border-white/10 bg-inverse text-[#e4f5ec]">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
           <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-sm">P</span>
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-sm text-white">P</span>
             Promptie
           </Link>
           <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm">
@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={link.href}
                   aria-current={current ? "page" : undefined}
                   className={`rounded-lg px-2.5 py-1.5 ${
-                    current ? "bg-accent text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+                    current ? "bg-accent-strong text-on-accent" : "text-[#bec9c2] hover:bg-white/10 hover:text-[#e4f5ec]"
                   }`}
                 >
                   {link.label}
@@ -57,11 +57,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <UserGuide />
             <LibraryMenu />
-            <label className="flex items-center gap-2 text-sm text-white/70">
+            <label className="flex items-center gap-2 text-sm text-[#bec9c2]">
               <span className="hidden sm:inline">Company</span>
               <select
                 aria-label="Company"
-                className="max-w-[14rem] rounded-md border border-white/15 bg-white/10 px-2 py-1.5 text-sm text-white outline-none focus:border-white/40 disabled:opacity-50"
+                className="max-w-[14rem] rounded-md border border-white/15 bg-white/10 px-2 py-1.5 text-sm text-[#e4f5ec] outline-none focus:border-white/40 disabled:opacity-50"
                 disabled={!ready || ordered.length === 0}
                 value={selectedCompanyId ?? ""}
                 onChange={(event) => setSelectedCompanyId(event.target.value || null)}
@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/companies/new"
               aria-label="Add company"
-              className="rounded-md px-2 py-1.5 text-sm text-white/80 hover:bg-white/10 hover:text-white"
+              className="rounded-md px-2 py-1.5 text-sm text-[#bec9c2] hover:bg-white/10 hover:text-[#e4f5ec]"
             >
               Add company
             </Link>
@@ -87,12 +87,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={user.photoURL} alt="" className="h-6 w-6 rounded-full" />
               ) : (
-                <span className="grid h-6 w-6 place-items-center rounded-full bg-accent text-xs font-semibold">{initial}</span>
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-accent text-xs font-semibold text-white">{initial}</span>
               )}
               <span className="hidden max-w-[9rem] truncate text-sm sm:inline">{accountName}</span>
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-sm text-white/80 hover:bg-white/10 hover:text-white"
+                className="rounded-md px-2 py-1 text-sm text-[#bec9c2] hover:bg-white/10 hover:text-[#e4f5ec]"
                 onClick={signOutUser}
               >
                 Sign out

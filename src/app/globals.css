@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f3efe6;
-  --ink: #14241e;
-  --card: #fffdf8;
-  --rail: #ebe4d6;
-  --muted: #5c6b64;
-  --line: #e3dacb;
-  --accent: #0e6b52;
-  --accent-strong: #0a5340;
-  --accent-soft: #e4f3ec;
-  --warn: #8d4e14;
-  --warn-soft: #f8ecdc;
-  --prompt: #10211b;
-  --prompt-text: #e7f3ec;
-  --slot-fill: #b6f5d4;
-  --slot-empty: #f0c27a;
+  --paper: #edfdf4;
+  --ink: #111e19;
+  --card: #ffffff;
+  --rail: #e7f7ee;
+  --muted: #3f4944;
+  --line: #bec9c2;
+  --accent: #00513d;
+  --accent-strong: #0e6b52;
+  --accent-soft: #e7f7ee;
+  --on-accent: #97e8c9;
+  --inverse: #25332e;
+  --warn: #763300;
+  --warn-soft: #ffdbca;
+  --prompt: #25332e;
+  --prompt-text: #e4f5ec;
+  --slot-fill: #a1f3d3;
+  --slot-empty: #ffb68e;
   --background: var(--paper);
   --foreground: var(--ink);
 }
@@ -30,6 +32,8 @@
   --color-accent: var(--accent);
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-inverse: var(--inverse);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-prompt: var(--prompt);
@@ -70,7 +74,7 @@ h3 {
 }
 
 ::selection {
-  background: #cfe8dc;
+  background: #a1f3d3;
 }
 
 @keyframes guide-rise {

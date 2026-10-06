@@ -190,7 +190,7 @@ export function FlowTest() {
         {error ? <p className="mt-4 text-sm text-warn">{error}</p> : null}
         {report ? (
           <section className="mt-8 overflow-hidden rounded-lg border border-line bg-card">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line bg-ink px-4 py-4 text-white">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line bg-inverse px-4 py-4 text-white">
               <div className="flex items-center gap-3">
                 <span className="grid h-9 w-9 place-items-center rounded-md bg-accent text-sm font-semibold">P</span>
                 <div>
@@ -285,8 +285,8 @@ function WatchFrame({
   if (device === "phone") {
     return (
       <div className={full ? "h-[min(88vh,820px)]" : "w-[220px]"}>
-        <div className="h-full rounded-[1.7rem] bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
-          <div className={`overflow-hidden rounded-[1.3rem] bg-[#f6f1e6] ${full ? "mx-auto aspect-[390/844] h-full" : "aspect-[390/844]"}`}>
+        <div className="h-full rounded-[1.7rem] bg-inverse p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
+          <div className={`overflow-hidden rounded-[1.3rem] bg-[#edfdf4] ${full ? "mx-auto aspect-[390/844] h-full" : "aspect-[390/844]"}`}>
             {picture}
           </div>
         </div>
@@ -296,13 +296,13 @@ function WatchFrame({
 
   return (
     <div className={full ? "w-[min(96vw,1200px)]" : "w-full max-w-[640px]"}>
-      <div className="rounded-xl bg-ink p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
-        <div className={`overflow-hidden rounded-md bg-[#f6f1e6] ${full ? "aspect-[16/10] max-h-[78vh]" : "aspect-[16/10]"}`}>
+      <div className="rounded-xl bg-inverse p-2 shadow-[0_18px_40px_rgba(20,36,30,0.18)]">
+        <div className={`overflow-hidden rounded-md bg-[#edfdf4] ${full ? "aspect-[16/10] max-h-[78vh]" : "aspect-[16/10]"}`}>
           {picture}
         </div>
       </div>
-      <div className="mx-auto h-2 w-28 rounded-b-md bg-ink/70" />
-      <div className="mx-auto h-1.5 w-44 rounded-b-lg bg-ink" />
+      <div className="mx-auto h-2 w-28 rounded-b-md bg-inverse/70" />
+      <div className="mx-auto h-1.5 w-44 rounded-b-lg bg-inverse" />
     </div>
   )
 }

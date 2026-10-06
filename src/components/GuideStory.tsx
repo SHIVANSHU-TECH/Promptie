@@ -258,11 +258,11 @@ export function GuideStory() {
 
 function Stage({ screen, sceneKey }: { screen: Screen; sceneKey: string }) {
   return (
-    <div className="mx-auto w-[250px] rounded-[2rem] bg-ink p-2 shadow-[0_24px_60px_rgba(20,36,30,0.28)]">
-      <div className="overflow-hidden rounded-[1.6rem] bg-[#f6f1e6]">
+    <div className="mx-auto w-[250px] rounded-[2rem] bg-inverse p-2 shadow-[0_24px_60px_rgba(20,36,30,0.28)]">
+      <div className="overflow-hidden rounded-[1.6rem] bg-[#edfdf4]">
         <div className="flex items-center justify-between px-4 pt-2 text-[10px] text-ink/70">
           <span>9:41</span>
-          <span className="h-4 w-16 rounded-full bg-ink" />
+          <span className="h-4 w-16 rounded-full bg-inverse" />
           <span>5G</span>
         </div>
         <div key={sceneKey} className="guide-rise h-[390px]">
@@ -296,7 +296,7 @@ function ScreenView({ screen }: { screen: Screen }) {
 function StoreChrome({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between bg-[#12352b] px-3 py-2 text-white">
+      <div className="flex items-center justify-between bg-[#25332e] px-3 py-2 text-white">
         <span className="text-[11px] font-semibold tracking-wide">ShapeMeds</span>
         <span className="rounded-full border border-white/30 px-2 py-0.5 text-[9px]">Cart 2</span>
       </div>
@@ -308,13 +308,13 @@ function StoreChrome({ children }: { children: React.ReactNode }) {
 function StoreHome() {
   return (
     <StoreChrome>
-      <p className="text-[10px] font-semibold tracking-[0.16em] text-[#0e6b52] uppercase">Weight care</p>
-      <p className="mt-1 text-lg leading-5 font-semibold text-[#14241e]">Physician-guided treatment</p>
+      <p className="text-[10px] font-semibold tracking-[0.16em] text-[#00513d] uppercase">Weight care</p>
+      <p className="mt-1 text-lg leading-5 font-semibold text-[#111e19]">Physician-guided treatment</p>
       <div className="mt-3 space-y-2">
         {["Semaglutide", "Tirzepatide"].map((name) => (
-          <div key={name} className="rounded-xl border border-[#e3dacb] bg-white px-3 py-2">
+          <div key={name} className="rounded-xl border border-[#bec9c2] bg-white px-3 py-2">
             <p className="text-xs font-semibold">{name}</p>
-            <p className="text-[10px] text-[#5c6b64]">View treatment</p>
+            <p className="text-[10px] text-[#3f4944]">View treatment</p>
           </div>
         ))}
       </div>
@@ -325,19 +325,19 @@ function StoreHome() {
 function StoreProduct() {
   return (
     <StoreChrome>
-      <p className="text-[10px] text-[#5c6b64]">← Weight loss</p>
+      <p className="text-[10px] text-[#3f4944]">← Weight loss</p>
       <p className="mt-1 text-base font-semibold">Semaglutide</p>
-      <p className="mt-3 text-[10px] font-semibold tracking-wide text-[#5c6b64] uppercase">Dose</p>
+      <p className="mt-3 text-[10px] font-semibold tracking-wide text-[#3f4944] uppercase">Dose</p>
       <div className="mt-1 grid grid-cols-3 gap-1">
         {["0.25 mg", "0.5 mg", "1 mg"].map((dose, index) => (
-          <span key={dose} className={`rounded-lg border px-1 py-1 text-center text-[9px] font-semibold ${index === 0 ? "border-[#0e6b52] bg-[#e4f3ec] text-[#0e6b52]" : "border-[#e3dacb] bg-white"}`}>
+          <span key={dose} className={`rounded-lg border px-1 py-1 text-center text-[9px] font-semibold ${index === 0 ? "border-[#00513d] bg-[#e7f7ee] text-[#00513d]" : "border-[#bec9c2] bg-white"}`}>
             {dose}
           </span>
         ))}
       </div>
-      <p className="mt-3 text-[10px] font-semibold tracking-wide text-[#5c6b64] uppercase">Supply</p>
-      <div className="mt-1 rounded-xl border border-[#0e6b52] bg-[#e4f3ec] px-2 py-2 text-[11px] font-semibold">Monthly · $199</div>
-      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Add to Cart</div>
+      <p className="mt-3 text-[10px] font-semibold tracking-wide text-[#3f4944] uppercase">Supply</p>
+      <div className="mt-1 rounded-xl border border-[#00513d] bg-[#e7f7ee] px-2 py-2 text-[11px] font-semibold">Monthly · $199</div>
+      <div className="mt-3 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">Add to Cart</div>
     </StoreChrome>
   )
 }
@@ -348,13 +348,13 @@ function StoreCart() {
       <p className="text-base font-semibold">Shopping cart</p>
       <div className="mt-3 space-y-2">
         {["Semaglutide — Monthly", "Tirzepatide — Monthly"].map((item) => (
-          <div key={item} className="rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-[11px] font-medium">
+          <div key={item} className="rounded-xl border border-[#bec9c2] bg-white px-2 py-2 text-[11px] font-medium">
             {item}
           </div>
         ))}
       </div>
-      <p className="mt-3 text-[10px] text-[#5c6b64]">Discount codes are applied at checkout.</p>
-      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Checkout</div>
+      <p className="mt-3 text-[10px] text-[#3f4944]">Discount codes are applied at checkout.</p>
+      <div className="mt-3 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">Checkout</div>
     </StoreChrome>
   )
 }
@@ -362,7 +362,7 @@ function StoreCart() {
 function StoreDetails() {
   return (
     <StoreChrome>
-      <p className="text-[10px] font-semibold tracking-wide text-[#0e6b52] uppercase">1 · Contact & shipping</p>
+      <p className="text-[10px] font-semibold tracking-wide text-[#00513d] uppercase">1 · Contact & shipping</p>
       <div className="mt-2 space-y-1.5">
         <Field label="Email" value="member@clinic.com" />
         <div className="grid grid-cols-2 gap-1.5">
@@ -375,7 +375,7 @@ function StoreDetails() {
         <Consent label="HIPAA Authorization" />
         <Consent label="Telehealth Consent" />
       </div>
-      <div className="mt-2 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Continue to payment</div>
+      <div className="mt-2 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">Continue to payment</div>
     </StoreChrome>
   )
 }
@@ -383,13 +383,13 @@ function StoreDetails() {
 function StorePayment() {
   return (
     <StoreChrome>
-      <p className="text-[10px] font-semibold tracking-wide text-[#0e6b52] uppercase">2 · Payment</p>
-      <div className="mt-2 rounded-xl border border-[#0e6b52] bg-[#e4f3ec] px-2 py-2">
-        <p className="text-[10px] font-semibold text-[#0e6b52]">Live Stripe · GLOBAL100</p>
-        <p className="mt-1 text-[10px] leading-4 text-[#5c6b64]">Applied after the member email is valid. A test key skips this coupon.</p>
+      <p className="text-[10px] font-semibold tracking-wide text-[#00513d] uppercase">2 · Payment</p>
+      <div className="mt-2 rounded-xl border border-[#00513d] bg-[#e7f7ee] px-2 py-2">
+        <p className="text-[10px] font-semibold text-[#00513d]">Live Stripe · GLOBAL100</p>
+        <p className="mt-1 text-[10px] leading-4 text-[#3f4944]">Applied after the member email is valid. A test key skips this coupon.</p>
       </div>
-      <div className="mt-3 rounded-xl border border-[#e3dacb] bg-white px-2 py-3 text-center text-[10px] text-[#5c6b64]">Card</div>
-      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Place order</div>
+      <div className="mt-3 rounded-xl border border-[#bec9c2] bg-white px-2 py-3 text-center text-[10px] text-[#3f4944]">Card</div>
+      <div className="mt-3 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">Place order</div>
     </StoreChrome>
   )
 }
@@ -397,14 +397,14 @@ function StorePayment() {
 function StoreThanks() {
   return (
     <StoreChrome>
-      <div className="mx-auto mt-4 grid h-10 w-10 place-items-center rounded-full bg-[#0e6b52] text-sm text-white">✓</div>
+      <div className="mx-auto mt-4 grid h-10 w-10 place-items-center rounded-full bg-[#00513d] text-sm text-white">✓</div>
       <p className="mt-3 text-center text-base font-semibold">Order confirmed</p>
-      <div className="mt-3 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-center">
-        <p className="text-[9px] tracking-wide text-[#5c6b64] uppercase">Order number</p>
+      <div className="mt-3 rounded-xl border border-[#bec9c2] bg-white px-2 py-2 text-center">
+        <p className="text-[9px] tracking-wide text-[#3f4944] uppercase">Order number</p>
         <p className="text-sm font-semibold">184295</p>
       </div>
-      <div className="mt-2 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-center">
-        <p className="text-[9px] tracking-wide text-[#5c6b64] uppercase">Member email</p>
+      <div className="mt-2 rounded-xl border border-[#bec9c2] bg-white px-2 py-2 text-center">
+        <p className="text-[9px] tracking-wide text-[#3f4944] uppercase">Member email</p>
         <p className="text-[11px] font-semibold">member@clinic.com</p>
       </div>
     </StoreChrome>
@@ -417,9 +417,9 @@ function StoreInbox() {
       <p className="text-sm font-semibold">Inbox</p>
       <div className="mt-2 space-y-2">
         {["Order confirmation", "Welcome, member login"].map((title) => (
-          <div key={title} className="rounded-xl border border-[#e3dacb] bg-white px-2 py-2">
+          <div key={title} className="rounded-xl border border-[#bec9c2] bg-white px-2 py-2">
             <p className="text-[11px] font-semibold">{title}</p>
-            <p className="text-[10px] text-[#5c6b64]">support@store.com</p>
+            <p className="text-[10px] text-[#3f4944]">support@store.com</p>
           </div>
         ))}
       </div>
@@ -431,11 +431,11 @@ function StorePortal() {
   return (
     <StoreChrome>
       <p className="text-sm font-semibold">Change your password</p>
-      <p className="mt-1 text-[10px] text-[#5c6b64]">Set a new password, then sign in again.</p>
+      <p className="mt-1 text-[10px] text-[#3f4944]">Set a new password, then sign in again.</p>
       <div className="mt-3 space-y-2">
-        <div className="rounded-lg border border-[#e3dacb] bg-white px-2 py-1.5 text-[11px]">New password</div>
-        <div className="rounded-lg border border-[#e3dacb] bg-white px-2 py-1.5 text-[11px]">Confirm password</div>
-        <div className="rounded-lg bg-[#0e6b52] px-2 py-1.5 text-center text-[11px] font-semibold text-white">Update password</div>
+        <div className="rounded-lg border border-[#bec9c2] bg-white px-2 py-1.5 text-[11px]">New password</div>
+        <div className="rounded-lg border border-[#bec9c2] bg-white px-2 py-1.5 text-[11px]">Confirm password</div>
+        <div className="rounded-lg bg-[#00513d] px-2 py-1.5 text-center text-[11px] font-semibold text-white">Update password</div>
       </div>
     </StoreChrome>
   )
@@ -444,11 +444,11 @@ function StorePortal() {
 function StoreIntake() {
   return (
     <StoreChrome>
-      <p className="text-[10px] font-semibold tracking-wide text-[#0e6b52] uppercase">Action required</p>
-      <div className="mt-2 rounded-xl border border-[#e3dacb] bg-white px-2 py-2">
+      <p className="text-[10px] font-semibold tracking-wide text-[#00513d] uppercase">Action required</p>
+      <div className="mt-2 rounded-xl border border-[#bec9c2] bg-white px-2 py-2">
         <p className="text-[11px] font-semibold">Metformin · 1 month</p>
-        <p className="text-[10px] text-[#5c6b64]">Order on the portal</p>
-        <p className="mt-2 rounded-lg bg-[#e4f3ec] px-2 py-1 text-center text-[10px] font-semibold text-[#0e6b52]">Complete medical intake</p>
+        <p className="text-[10px] text-[#3f4944]">Order on the portal</p>
+        <p className="mt-2 rounded-lg bg-[#e7f7ee] px-2 py-1 text-center text-[10px] font-semibold text-[#00513d]">Complete medical intake</p>
       </div>
     </StoreChrome>
   )
@@ -463,7 +463,7 @@ function StoreLegal() {
         {pages.map((page) => (
           <li key={page} className="flex items-center justify-between rounded-lg bg-white px-2 py-1.5 text-[11px]">
             <span>{page}</span>
-            <span className="text-[#0e6b52]">Pass</span>
+            <span className="text-[#00513d]">Pass</span>
           </li>
         ))}
       </ul>
@@ -473,13 +473,13 @@ function StoreLegal() {
 
 function PromptieSignIn() {
   return (
-    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-4">
-      <div className="rounded-2xl border border-[#e3dacb] bg-white p-3">
+    <div className="flex h-full flex-col bg-[#edfdf4] px-3 py-4">
+      <div className="rounded-2xl border border-[#bec9c2] bg-white p-3">
         <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-[#0e6b52] text-xs font-semibold text-white">P</span>
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-[#00513d] text-xs font-semibold text-white">P</span>
           <span className="text-sm font-semibold">Promptie</span>
         </div>
-        <div className="mt-4 rounded-lg border border-[#e3dacb] py-2 text-center text-[11px] font-semibold">Continue with Google</div>
+        <div className="mt-4 rounded-lg border border-[#bec9c2] py-2 text-center text-[11px] font-semibold">Continue with Google</div>
       </div>
     </div>
   )
@@ -487,11 +487,11 @@ function PromptieSignIn() {
 
 function PromptieCompany() {
   return (
-    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
+    <div className="flex h-full flex-col bg-[#edfdf4] px-3 py-3">
       <p className="text-sm font-semibold">Companies</p>
-      <p className="mt-2 text-[10px] leading-4 text-[#5c6b64]">No sample brands. Add the one you are working on.</p>
-      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">New company</div>
-      <div className="mt-3 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-[10px] leading-4 text-[#5c6b64]">
+      <p className="mt-2 text-[10px] leading-4 text-[#3f4944]">No sample brands. Add the one you are working on.</p>
+      <div className="mt-3 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">New company</div>
+      <div className="mt-3 rounded-xl border border-[#bec9c2] bg-white px-2 py-2 text-[10px] leading-4 text-[#3f4944]">
         Site id, chat widget, and member JSON still work with no company selected.
       </div>
     </div>
@@ -500,16 +500,16 @@ function PromptieCompany() {
 
 function PromptieOne() {
   return (
-    <div className="flex h-full flex-col bg-[#14241e] text-white">
+    <div className="flex h-full flex-col bg-[#25332e] text-white">
       <div className="flex items-center justify-between px-3 py-2 text-[10px]">
         <span className="font-semibold">Promptie</span>
         <span className="rounded-md bg-white/10 px-2 py-1">ShapeMeds</span>
       </div>
-      <div className="m-3 rounded-xl bg-[#f6f1e6] p-3 text-[#14241e]">
-        <p className="text-[10px] text-[#5c6b64]">One prompt checked</p>
+      <div className="m-3 rounded-xl bg-[#edfdf4] p-3 text-[#111e19]">
+        <p className="text-[10px] text-[#3f4944]">One prompt checked</p>
         <p className="mt-1 text-sm font-semibold">Stripe checkout</p>
         <p className="mt-2 rounded-md bg-white px-2 py-2 font-mono text-[10px] leading-4">{`site {{site_id}}`}</p>
-        <div className="mt-3 rounded-full bg-[#0e6b52] py-1.5 text-center text-[10px] font-semibold text-white">Modify this prompt</div>
+        <div className="mt-3 rounded-full bg-[#00513d] py-1.5 text-center text-[10px] font-semibold text-white">Modify this prompt</div>
       </div>
     </div>
   )
@@ -517,28 +517,28 @@ function PromptieOne() {
 
 function PromptieMerge() {
   return (
-    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
-      <p className="text-[10px] font-semibold tracking-wide text-[#5c6b64] uppercase">Chat</p>
+    <div className="flex h-full flex-col bg-[#edfdf4] px-3 py-3">
+      <p className="text-[10px] font-semibold tracking-wide text-[#3f4944] uppercase">Chat</p>
       {["Stripe + create order", "PAP click and sale"].map((title) => (
         <div key={title} className="mt-2 flex items-center gap-2 rounded-lg bg-white px-2 py-2 text-[11px]">
-          <span className="grid h-3.5 w-3.5 place-items-center rounded-sm bg-[#0e6b52] text-[9px] text-white">✓</span>
+          <span className="grid h-3.5 w-3.5 place-items-center rounded-sm bg-[#00513d] text-[9px] text-white">✓</span>
           {title}
         </div>
       ))}
-      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Merge selected prompts</div>
-      <div className="mt-3 rounded-xl border border-[#0e6b52] bg-[#e4f3ec] px-2 py-2 text-[11px] font-semibold text-[#0e6b52]">One prompt · Add to library</div>
+      <div className="mt-3 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">Merge selected prompts</div>
+      <div className="mt-3 rounded-xl border border-[#00513d] bg-[#e7f7ee] px-2 py-2 text-[11px] font-semibold text-[#00513d]">One prompt · Add to library</div>
     </div>
   )
 }
 
 function PromptieSheet() {
   return (
-    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
-      <p className="text-[10px] font-semibold tracking-wide text-[#5c6b64] uppercase">Chat</p>
-      <div className="mt-2 ml-auto max-w-[92%] rounded-xl bg-[#e4f3ec] px-2 py-2 text-[10px] leading-4">
+    <div className="flex h-full flex-col bg-[#edfdf4] px-3 py-3">
+      <p className="text-[10px] font-semibold tracking-wide text-[#3f4944] uppercase">Chat</p>
+      <div className="mt-2 ml-auto max-w-[92%] rounded-xl bg-[#e7f7ee] px-2 py-2 text-[10px] leading-4">
         What is the site id and chat widget for this brand?
       </div>
-      <div className="mt-2 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-[10px] leading-4">
+      <div className="mt-2 rounded-xl border border-[#bec9c2] bg-white px-2 py-2 text-[10px] leading-4">
         <p className="font-semibold">From the live sheet</p>
         <p className="mt-1">Site id 450</p>
         <p>Widget 6a84be0c56eb8ca70386b9e8</p>
@@ -549,14 +549,14 @@ function PromptieSheet() {
 
 function PromptieMember() {
   return (
-    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
+    <div className="flex h-full flex-col bg-[#edfdf4] px-3 py-3">
       <p className="text-sm font-semibold">Member JSON</p>
-      <div className="mt-2 rounded-lg border border-[#e3dacb] bg-white px-2 py-1.5 text-[10px]">Project name</div>
-      <div className="mt-1 rounded-lg border border-[#0e6b52] bg-white px-2 py-1.5 text-[10px]">https://brand.com</div>
-      <p className="mt-2 text-[10px] leading-4 text-[#5c6b64]">Site id and widget from the sheet. Colors from the link.</p>
-      <div className="mt-2 rounded-xl bg-[#14241e] px-2 py-2 font-mono text-[9px] leading-4 text-white">
+      <div className="mt-2 rounded-lg border border-[#bec9c2] bg-white px-2 py-1.5 text-[10px]">Project name</div>
+      <div className="mt-1 rounded-lg border border-[#00513d] bg-white px-2 py-1.5 text-[10px]">https://brand.com</div>
+      <p className="mt-2 text-[10px] leading-4 text-[#3f4944]">Site id and widget from the sheet. Colors from the link.</p>
+      <div className="mt-2 rounded-xl bg-[#25332e] px-2 py-2 font-mono text-[9px] leading-4 text-white">
         <p>{`"siteId": "450"`}</p>
-        <p className="text-[#b6f5d4]">{`"primary": "#D96B2B"`}</p>
+        <p className="text-[#a1f3d3]">{`"primary": "#D96B2B"`}</p>
       </div>
     </div>
   )
@@ -564,14 +564,14 @@ function PromptieMember() {
 
 function PromptieTesting() {
   return (
-    <div className="flex h-full flex-col bg-[#f3efe6] px-3 py-3">
+    <div className="flex h-full flex-col bg-[#edfdf4] px-3 py-3">
       <p className="text-sm font-semibold">Flow testing</p>
-      <p className="mt-2 text-[9px] tracking-wide text-[#5c6b64] uppercase">Store link</p>
-      <div className="mt-1 rounded-lg border border-[#e3dacb] bg-white px-2 py-2 text-[10px]">https://shapemeds.com</div>
-      <p className="mt-2 text-[9px] tracking-wide text-[#5c6b64] uppercase">Member email</p>
-      <div className="mt-1 rounded-lg border border-[#0e6b52] bg-white px-2 py-2 text-[10px] font-semibold">member@clinic.com</div>
-      <div className="mt-3 rounded-full bg-[#0e6b52] py-2 text-center text-[11px] font-semibold text-white">Run test</div>
-      <div className="mt-3 rounded-xl bg-[#14241e] px-2 py-2 text-[10px] text-white">
+      <p className="mt-2 text-[9px] tracking-wide text-[#3f4944] uppercase">Store link</p>
+      <div className="mt-1 rounded-lg border border-[#bec9c2] bg-white px-2 py-2 text-[10px]">https://shapemeds.com</div>
+      <p className="mt-2 text-[9px] tracking-wide text-[#3f4944] uppercase">Member email</p>
+      <div className="mt-1 rounded-lg border border-[#00513d] bg-white px-2 py-2 text-[10px] font-semibold">member@clinic.com</div>
+      <div className="mt-3 rounded-full bg-[#00513d] py-2 text-center text-[11px] font-semibold text-white">Run test</div>
+      <div className="mt-3 rounded-xl bg-[#25332e] px-2 py-2 text-[10px] text-white">
         <p>Order 184295</p>
         <p className="mt-1 text-white/70">member@clinic.com</p>
       </div>
@@ -581,8 +581,8 @@ function PromptieTesting() {
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#e3dacb] bg-white px-2 py-1">
-      <p className="text-[8px] tracking-wide text-[#5c6b64] uppercase">{label}</p>
+    <div className="rounded-lg border border-[#bec9c2] bg-white px-2 py-1">
+      <p className="text-[8px] tracking-wide text-[#3f4944] uppercase">{label}</p>
       <p className="text-[10px] font-medium">{value}</p>
     </div>
   )
@@ -591,7 +591,7 @@ function Field({ label, value }: { label: string; value: string }) {
 function Consent({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-1.5 text-[10px]">
-      <span className="grid h-3.5 w-3.5 place-items-center rounded-sm bg-[#0e6b52] text-[8px] text-white">✓</span>
+      <span className="grid h-3.5 w-3.5 place-items-center rounded-sm bg-[#00513d] text-[8px] text-white">✓</span>
       {label}
     </div>
   )
