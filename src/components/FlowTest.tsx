@@ -44,8 +44,9 @@ export function FlowTest() {
     try {
       const response = await fetch("/api/flow-test", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, run: crypto.randomUUID() }),
       })
       const type = response.headers.get("content-type") || ""
       if (type.includes("application/json") && !type.includes("ndjson")) {

@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto"
 import { request as httpsRequest } from "https"
 import type { BrowserRun } from "./browser-session"
 import type { FlowCheck } from "./flow-report"
@@ -5,6 +6,7 @@ import type { FlowCheck } from "./flow-report"
 type Inbox = { address: string; token: string; api: string }
 
 const INBOX_APIS = ["https://api.duckmail.sbs", "https://api.mail.tm"]
+const usedAddresses = new Set<string>()
 
 export type MailMessage = { subject: string; text: string }
 
@@ -93,23 +95,25 @@ function mailJson(url: string, init?: { method?: string; headers?: Record<string
     const headers = {
       Accept: "application/json",
       "User-Agent": "Mozilla/5.0 (compatible; Promptie/1.0)",
+      "Cache-Control": "no-store",
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     }
     try {
-      const response = await fetch(url, {
-        method: init?.method || "GET",
-        headers,
-        body: init?.body,
-        cache: "no-store",
-        redirect: "follow",
-      })
-      const text = (await response.text()).trim()
-      if (text) return parseMail(text, response.ok)
+      return parseMail(await httpsText(url, init), true)
     } catch {
-      /* an empty or blocked response falls through to the raw request */
+      /* the raw request can be blocked; try fetch next */
     }
-    return parseMail(await httpsText(url, init), true)
+    const response = await fetch(url, {
+      method: init?.method || "GET",
+      headers,
+      body: init?.body,
+      cache: "no-store",
+      redirect: "follow",
+    })
+    const text = (await response.text()).trim()
+    if (!text) throw new Error("empty")
+    return parseMail(text, response.ok)
   }
 
   return (async () => {
@@ -142,19 +146,46 @@ function usableDomain(item: unknown) {
   return record.domain
 }
 
+function freshAddress(domain: string) {
+  return `p${Date.now().toString(36)}${randomBytes(3).toString("hex")}@${domain}`
+}
+
+function createdAddress(created: unknown, address: string) {
+  if (!created || typeof created !== "object" || !("address" in created)) return false
+  return String((created as { address?: string }).address || "").toLowerCase() === address.toLowerCase()
+}
+
+function tokenMatches(token: string, address: string) {
+  const part = token.split(".")[1]
+  if (!part) return true
+  try {
+    const payload = JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as { address?: string }
+    if (!payload.address) return true
+    return payload.address.toLowerCase() === address.toLowerCase()
+  } catch {
+    return true
+  }
+}
+
 async function openOn(api: string): Promise<Inbox | null> {
-  const domains = await mailJson(`${api}/domains`).catch(() => null)
-  const domain = listed(domains).map(usableDomain).find(Boolean)
-  if (!domain) return null
-  const address = `promptie${Math.random().toString(36).slice(2, 8)}@${domain}`
-  const password = `Promptie${Math.random().toString(36).slice(2, 10)}`
-  const account = JSON.stringify({ address, password })
-  const created = await mailJson(`${api}/accounts`, { method: "POST", body: account }).catch(() => null)
-  if (!created || typeof created !== "object" || !("address" in created)) return null
-  const tokenBody = await mailJson(`${api}/token`, { method: "POST", body: account }).catch(() => null)
-  const token = tokenBody && typeof tokenBody === "object" && "token" in tokenBody ? String((tokenBody as { token?: string }).token || "") : ""
-  if (!token) return null
-  return { address, token, api }
+  const domains = await mailJson(`${api}/domains?fresh=${Date.now()}`).catch(() => null)
+  const choices = listed(domains).map(usableDomain).filter(Boolean)
+  if (!choices.length) return null
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const domain = choices[Math.floor(Math.random() * choices.length)]
+    const address = freshAddress(domain)
+    if (usedAddresses.has(address.toLowerCase())) continue
+    const password = `Promptie${randomBytes(4).toString("hex")}`
+    const account = JSON.stringify({ address, password })
+    const created = await mailJson(`${api}/accounts`, { method: "POST", body: account }).catch(() => null)
+    if (!createdAddress(created, address)) continue
+    const tokenBody = await mailJson(`${api}/token`, { method: "POST", body: account }).catch(() => null)
+    const token = tokenBody && typeof tokenBody === "object" && "token" in tokenBody ? String((tokenBody as { token?: string }).token || "") : ""
+    if (!token || !tokenMatches(token, address)) continue
+    usedAddresses.add(address.toLowerCase())
+    return { address, token, api }
+  }
+  return null
 }
 
 export async function openTempInbox(): Promise<Inbox> {

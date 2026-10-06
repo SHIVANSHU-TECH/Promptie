@@ -52,7 +52,8 @@ export async function runFlowTest(
 ): Promise<FlowReport> {
   const url = publicUrl(rawUrl)
   const inbox = await openTempInbox()
-  const email = inbox.address || memberEmail.trim()
+  const email = inbox.address
+  onFrame?.({ phone: "", laptop: "", label: `New inbox ${email}` })
   const startedAt = new Date().toISOString()
   const buyer: Buyer = {
     first: "Quinn",
@@ -120,6 +121,16 @@ export async function runFlowTest(
   })
 
     await browser.goto(url)
+    await browser.page.evaluate<void>(`(() => {
+      try { localStorage.clear() } catch (error) {}
+      try { sessionStorage.clear() } catch (error) {}
+      try {
+        document.cookie.split(";").forEach((item) => {
+          const name = item.split("=")[0].trim()
+          if (name) document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/"
+        })
+      } catch (error) {}
+    })()`)
     await browser.viewport(390, 844, true)
     await snap("Store home")
     checks.push(check("open", "Open the store", true, url))
@@ -194,14 +205,17 @@ export async function runFlowTest(
     }
 
     await snap("Contact and shipping")
-    const filled = checkout ? await fillCheckout(browser, buyer) : 0
+    const entered = checkout ? await fillCheckout(browser, buyer) : { count: 0, email: "" }
+    const emailLanded = entered.email.toLowerCase() === buyer.email.toLowerCase()
     if (checkout) consents += await acceptConsents(browser)
     checks.push(
       check(
         "details",
         "Contact, shipping, and consent",
-        filled >= 6 && consents >= 2,
-        `Filled ${filled} fields and accepted ${consents} required consent boxes for ${buyer.email}.`,
+        entered.count >= 6 && consents >= 2 && (!checkout || emailLanded),
+        checkout && !emailLanded
+          ? `The checkout kept ${entered.email || "another email"} instead of the new inbox ${buyer.email}.`
+          : `Filled ${entered.count} fields and accepted ${consents} required consent boxes for ${buyer.email}.`,
       ),
     )
 
@@ -475,7 +489,7 @@ async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
     `(() => [...document.querySelectorAll("select option")].some((option) => /^texas$/i.test((option.textContent || "").trim())) || [...document.querySelectorAll("input,textarea")].some((field) => /state/i.test([field.placeholder, field.name, field.id, field.getAttribute("aria-label")].filter(Boolean).join(" "))))()`,
     10000,
   )
-  const filled = await browser.page.evaluate<number>(`(() => {
+  const filled = await browser.page.evaluate<{ count: number; email: string }>(`(() => {
     const buyer = ${JSON.stringify(buyer)}
     const labelFor = (field) => {
       const parent = field.parentElement
@@ -489,11 +503,12 @@ async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
     const write = (field, value) => {
       if (!field || field.disabled || field.readOnly) return false
       let next = value
+      const proto = field instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
+      const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set
       if (field instanceof HTMLSelectElement) {
         const option = [...field.options].find((item) => item.value === value || (item.textContent || "").trim().toLowerCase() === String(value).toLowerCase())
         if (!option) return false
         next = option.value
-        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set
         const tracker = field._valueTracker
         if (tracker) tracker.setValue("")
         setter?.call(field, next)
@@ -502,17 +517,14 @@ async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
         option.selected = true
         return field.value === next
       }
-      field.focus()
-      field.select?.()
-      const inserted = document.execCommand("insertText", false, String(next))
-      if (!inserted) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
-        const tracker = field._valueTracker
-        if (tracker) tracker.setValue("")
-        setter?.call(field, next)
-        field.dispatchEvent(new Event("input", { bubbles: true }))
-        field.dispatchEvent(new Event("change", { bubbles: true }))
-      }
+      const tracker = field._valueTracker
+      if (tracker) tracker.setValue("promptie-clear")
+      setter?.call(field, "")
+      field.dispatchEvent(new Event("input", { bubbles: true }))
+      if (tracker) tracker.setValue("")
+      setter?.call(field, String(next))
+      field.dispatchEvent(new Event("input", { bubbles: true }))
+      field.dispatchEvent(new Event("change", { bubbles: true }))
       const current = String(field.value || "")
       return current === String(next) || current === String(next).replace(/\\D/g, "")
     }
@@ -536,7 +548,8 @@ async function fillCheckout(browser: BrowserRun, buyer: Buyer) {
       used.add(field)
       if (write(field, value)) count += 1
     }
-    return count
+    const emailField = fields.find((item) => item.type === "email" || /email/.test(labelFor(item)))
+    return { count, email: String(emailField && emailField.value || "") }
   })()`)
   await sleep(400)
   return filled
