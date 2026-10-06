@@ -16,6 +16,7 @@ export type FlowReport = {
   couponCode: string
   orderId: string
   email: string
+  memberPassword: string
   checks: FlowCheck[]
 }
 

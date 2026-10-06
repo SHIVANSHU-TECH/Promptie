@@ -1,4 +1,5 @@
 import { BrowserRun } from "./browser-session"
+import { finishMemberPortal, openTempInbox, waitForMail } from "./member-followup"
 import type { FlowCheck, FlowReport } from "./flow-report"
 
 const COUPON = "GLOBAL100"
@@ -50,10 +51,8 @@ export async function runFlowTest(
   onFrame?: (frame: FlowFrame) => void,
 ): Promise<FlowReport> {
   const url = publicUrl(rawUrl)
-  const email = memberEmail.trim()
-  if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
-    throw new Error("Enter a valid member email.")
-  }
+  const inbox = await openTempInbox()
+  const email = inbox.address || memberEmail.trim()
   const startedAt = new Date().toISOString()
   const buyer: Buyer = {
     first: "Quinn",
@@ -89,6 +88,7 @@ export async function runFlowTest(
   let stripeMode: FlowReport["stripeMode"] = "unknown"
   let couponUsed = false
   let orderId = ""
+  let memberPassword = ""
 
   try {
   await browser.page.send("Page.addScriptToEvaluateOnNewDocument", {
@@ -274,7 +274,25 @@ export async function runFlowTest(
       orderId = placed.orderId
       checks.push(check("order", "Create the order", Boolean(orderId), orderId ? `Order id ${orderId}.` : placed.detail))
     }
-    checks.push(check("email", "Member email", true, buyer.email))
+    checks.push(check("inbox", "Temporary inbox", true, `Checkout used ${buyer.email}.`))
+
+    await snap("Reading the inbox")
+    const messages = orderId ? await waitForMail(inbox.token) : []
+    if (orderId) {
+      const member = await finishMemberPortal(browser, url, buyer.email, messages, async (label) => {
+        await snap(label)
+      })
+      memberPassword = member.password
+      checks.push(...member.checks)
+    } else {
+      checks.push(check("order-mail", "Order confirmation mail", false, "No order was created, so no confirmation mail was expected."))
+      checks.push(check("member-mail", "Member id and password mail", false, "A member login is only created after an order."))
+      checks.push(check("member-login", "Member login", false, "Member login needs a completed order."))
+      checks.push(check("password-reset", "Set a new password", false, "The password page needs a completed order."))
+      checks.push(check("orders-visible", "Orders on the member portal", false, "The portal has no order to show."))
+      checks.push(check("intake-present", "Intake received", false, "An intake is only created with an order."))
+      checks.push(check("intake-submitted", "Every product intake submitted", false, "There was no order, so no intake was submitted."))
+    }
 
     await snap("Legal pages")
     await browser.goto(url)
@@ -295,6 +313,7 @@ export async function runFlowTest(
     couponCode: couponUsed ? COUPON : "",
     orderId,
     email: buyer.email,
+    memberPassword,
     checks,
   }
 }

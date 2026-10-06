@@ -5,16 +5,13 @@ export const maxDuration = 300
 
 export async function POST(request: Request) {
   let url = ""
-  let email = ""
   try {
-    const body = (await request.json()) as { url?: unknown; email?: unknown }
+    const body = (await request.json()) as { url?: unknown }
     url = typeof body.url === "string" ? body.url : ""
-    email = typeof body.email === "string" ? body.email : ""
   } catch {
     return Response.json({ error: "Send the store link as JSON." }, { status: 400 })
   }
   if (!url.trim()) return Response.json({ error: "Enter the Lovable or live link." }, { status: 400 })
-  if (!email.trim()) return Response.json({ error: "Enter the member email." }, { status: 400 })
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
@@ -24,7 +21,7 @@ export async function POST(request: Request) {
       }
       send({ type: "frame", label: "Starting the browser" })
       try {
-        const report = await runFlowTest(url, email, (frame) => {
+        const report = await runFlowTest(url, "", (frame) => {
           send({ type: "frame", phone: frame.phone, laptop: frame.laptop, label: frame.label })
         })
         send({ type: "report", report })

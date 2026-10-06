@@ -16,6 +16,7 @@ export function reportWorkbook(report: FlowReport) {
     styledRow("label", ["Coupon", report.couponUsed ? report.couponCode : "Not used"]),
     styledRow("label", ["Order id", report.orderId || "Not created"]),
     styledRow("label", ["Mail id", report.email || "Not entered"]),
+    styledRow("label", ["Password set", report.memberPassword || "Not set"]),
     styledRow("head", ["Check", "Result", "Detail"]),
     ...report.checks.map((item) =>
       styledRow(item.status === "pass" ? "pass" : "fail", [item.name, item.status.toUpperCase(), item.detail]),
@@ -58,6 +59,7 @@ export function reportPdf(report: FlowReport) {
     `Stripe ${report.stripeMode}    Coupon ${report.couponUsed ? report.couponCode : "not used"}`,
     `Order id ${report.orderId || "not created"}`,
     `Mail id ${report.email || "not entered"}`,
+    `Password set ${report.memberPassword || "not set"}`,
     "",
     ...report.checks.map((item) => `${item.status === "pass" ? "PASS" : "FAIL"}  ${item.name} — ${item.detail}`),
   ]

@@ -44,7 +44,7 @@ export function UserGuide({ tone = "header" }: { tone?: "header" | "card" }) {
                   How the flow works
                 </h2>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-                  ShapeMeds shows the store path the tester walks. After that: add your own company, modify or merge prompts, look up a site id and chat widget, build a member JSON, then run the test with a member email.
+                  The story covers the whole product. First the store path, including the temporary inbox, member login, new password, orders, and intake. Then Promptie itself: sign in, add a company, modify one prompt, merge prompts, ask the sheet, build a member JSON, and run Testing.
                 </p>
               </div>
               <button

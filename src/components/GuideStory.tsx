@@ -11,6 +11,9 @@ type Screen =
   | "details"
   | "payment"
   | "thanks"
+  | "inbox"
+  | "portal"
+  | "intake"
   | "legal"
   | "signin"
   | "company"
@@ -75,13 +78,37 @@ const scenes: Scene[] = [
     chapter: "ShapeMeds",
     time: "0:30",
     title: "Read the order and the email",
-    body: "The thank-you page shows the order number and the member email from checkout. The report brings both back: the order id, and the same email you typed into Testing.",
+    body: "The thank-you page says the order is confirmed and tells the buyer to check email for member portal credentials, then sign in and complete the forms. A member login is only created when this order succeeds.",
     screen: "thanks",
+  },
+  {
+    id: "inbox",
+    chapter: "ShapeMeds",
+    time: "0:36",
+    title: "Read the temporary inbox",
+    body: "Testing opens its own inbox and types that address at checkout. One order confirmation arrives for each product. A welcome mail arrives with the member id, a generated password, and the member login link.",
+    screen: "inbox",
+  },
+  {
+    id: "portal",
+    chapter: "ShapeMeds",
+    time: "0:42",
+    title: "Sign in and set a password",
+    body: "The test opens the member link, signs in with the mailed id and password, and lands on Change Your Password. It sets a new password, signs in again, and the report shows that password so you can check the portal yourself.",
+    screen: "portal",
+  },
+  {
+    id: "intake",
+    chapter: "ShapeMeds",
+    time: "0:48",
+    title: "Find the orders and the intake",
+    body: "The member home lists each order from checkout. Every product with Complete Medical Intake gets its own form. The test fills that form and submits it, then returns for the next product. The checklist passes only when every product intake is submitted.",
+    screen: "intake",
   },
   {
     id: "legal",
     chapter: "ShapeMeds",
-    time: "0:36",
+    time: "0:54",
     title: "Check the legal pages",
     body: "The footer is part of the flow. The test opens Privacy, Terms of Service, Telehealth Consent, HIPAA Notice, HIPAA Authorization, and Returns & Refunds, and passes each one when the page has real policy text.",
     screen: "legal",
@@ -89,7 +116,7 @@ const scenes: Scene[] = [
   {
     id: "signin",
     chapter: "Promptie",
-    time: "0:42",
+    time: "1:00",
     title: "Sign in with Google",
     body: "Promptie opens with one button: Continue with Google. The header then has Board, Templates, Companies, Chat, Member, and Testing, plus the company menu. There are no sample companies to delete.",
     screen: "signin",
@@ -97,7 +124,7 @@ const scenes: Scene[] = [
   {
     id: "company",
     chapter: "Promptie",
-    time: "0:48",
+    time: "1:06",
     title: "Add the brand yourself",
     body: "Open Companies and create the brand you are working on. Its name and values fill {{slots}} on the Board. Chat can still answer a site id, a chat widget, or a member JSON before any company exists.",
     screen: "company",
@@ -105,7 +132,7 @@ const scenes: Scene[] = [
   {
     id: "one",
     chapter: "Promptie",
-    time: "0:54",
+    time: "1:12",
     title: "Modify one prompt for a project",
     body: "Pick the company in the header. On the Board, one template fills its {{slots}} with that company’s values. To change the wording, open Chat, leave a single prompt checked, and click Modify this prompt. Copy it for the company, or Add to library and use it on the Board.",
     screen: "one",
@@ -113,7 +140,7 @@ const scenes: Scene[] = [
   {
     id: "merge",
     chapter: "Promptie",
-    time: "1:00",
+    time: "1:18",
     title: "Merge prompts, then use the result",
     body: "In Chat, check two or more prompts and click Merge selected prompts. You get one titled prompt. Add to library, open it on the Board, and copy it for the company. Brand details stay in {{slots}}.",
     screen: "merge",
@@ -121,7 +148,7 @@ const scenes: Scene[] = [
   {
     id: "sheet",
     chapter: "Promptie",
-    time: "1:06",
+    time: "1:24",
     title: "Ask for a site id or chat widget",
     body: "In Chat, ask for a site id or a chat widget by brand name. The answer is read from the live checkout sheet, so a brand added to the sheet later is included. If that name is not listed, Chat says so instead of inventing an id.",
     screen: "sheet",
@@ -129,7 +156,7 @@ const scenes: Scene[] = [
   {
     id: "member",
     chapter: "Promptie",
-    time: "1:12",
+    time: "1:30",
     title: "Build a member JSON",
     body: "Open Member, or ask Chat for a member JSON. Give the project name and the live or Lovable link. Site id and widget come from the sheet when the brand is listed; otherwise type them or leave them empty. Colors are read from that link. Paste Drive links for the logo and favicon when you have them, then copy the JSON.",
     screen: "member",
@@ -137,9 +164,9 @@ const scenes: Scene[] = [
   {
     id: "testing",
     chapter: "Promptie",
-    time: "1:18",
-    title: "Run the test with a member email",
-    body: "Open Testing. Paste the live or Lovable link and the member email. The run walks the store path and returns the order id plus that email. GLOBAL100 is used only when Stripe is live. Export the pass or fail report as Excel or PDF.",
+    time: "1:36",
+    title: "Run the full test",
+    body: "Open Testing and paste the live or Lovable link. The run opens a temporary inbox, places the order, reads both mails, sets the member password, checks the orders, and submits an intake when one is offered. The report shows the member id and the password that was set. Export it as Excel or PDF.",
     screen: "testing",
   },
 ]
@@ -253,6 +280,9 @@ function ScreenView({ screen }: { screen: Screen }) {
   if (screen === "details") return <StoreDetails />
   if (screen === "payment") return <StorePayment />
   if (screen === "thanks") return <StoreThanks />
+  if (screen === "inbox") return <StoreInbox />
+  if (screen === "portal") return <StorePortal />
+  if (screen === "intake") return <StoreIntake />
   if (screen === "legal") return <StoreLegal />
   if (screen === "signin") return <PromptieSignIn />
   if (screen === "company") return <PromptieCompany />
@@ -376,6 +406,49 @@ function StoreThanks() {
       <div className="mt-2 rounded-xl border border-[#e3dacb] bg-white px-2 py-2 text-center">
         <p className="text-[9px] tracking-wide text-[#5c6b64] uppercase">Member email</p>
         <p className="text-[11px] font-semibold">member@clinic.com</p>
+      </div>
+    </StoreChrome>
+  )
+}
+
+function StoreInbox() {
+  return (
+    <StoreChrome>
+      <p className="text-sm font-semibold">Inbox</p>
+      <div className="mt-2 space-y-2">
+        {["Order confirmation", "Welcome, member login"].map((title) => (
+          <div key={title} className="rounded-xl border border-[#e3dacb] bg-white px-2 py-2">
+            <p className="text-[11px] font-semibold">{title}</p>
+            <p className="text-[10px] text-[#5c6b64]">support@store.com</p>
+          </div>
+        ))}
+      </div>
+    </StoreChrome>
+  )
+}
+
+function StorePortal() {
+  return (
+    <StoreChrome>
+      <p className="text-sm font-semibold">Change your password</p>
+      <p className="mt-1 text-[10px] text-[#5c6b64]">Set a new password, then sign in again.</p>
+      <div className="mt-3 space-y-2">
+        <div className="rounded-lg border border-[#e3dacb] bg-white px-2 py-1.5 text-[11px]">New password</div>
+        <div className="rounded-lg border border-[#e3dacb] bg-white px-2 py-1.5 text-[11px]">Confirm password</div>
+        <div className="rounded-lg bg-[#0e6b52] px-2 py-1.5 text-center text-[11px] font-semibold text-white">Update password</div>
+      </div>
+    </StoreChrome>
+  )
+}
+
+function StoreIntake() {
+  return (
+    <StoreChrome>
+      <p className="text-[10px] font-semibold tracking-wide text-[#0e6b52] uppercase">Action required</p>
+      <div className="mt-2 rounded-xl border border-[#e3dacb] bg-white px-2 py-2">
+        <p className="text-[11px] font-semibold">Metformin · 1 month</p>
+        <p className="text-[10px] text-[#5c6b64]">Order on the portal</p>
+        <p className="mt-2 rounded-lg bg-[#e4f3ec] px-2 py-1 text-center text-[10px] font-semibold text-[#0e6b52]">Complete medical intake</p>
       </div>
     </StoreChrome>
   )
