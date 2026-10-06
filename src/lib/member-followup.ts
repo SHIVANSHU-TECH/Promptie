@@ -2,7 +2,9 @@ import { request as httpsRequest } from "https"
 import type { BrowserRun } from "./browser-session"
 import type { FlowCheck } from "./flow-report"
 
-type Inbox = { address: string; token: string }
+type Inbox = { address: string; token: string; api: string }
+
+const INBOX_APIS = ["https://api.duckmail.sbs", "https://api.mail.tm"]
 
 export type MailMessage = { subject: string; text: string }
 
@@ -35,48 +37,80 @@ function htmlText(html: string) {
     .trim()
 }
 
-function mailJson(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) {
-  const read = () =>
-    new Promise<unknown>((resolve, reject) => {
-      const target = new URL(url)
-      const body = init?.body
-      const req = httpsRequest(
-        {
-          hostname: target.hostname,
-          path: `${target.pathname}${target.search}`,
-          method: init?.method || "GET",
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "Mozilla/5.0 (compatible; Promptie/1.0)",
-            ...(body ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } : {}),
-            ...init?.headers,
-          },
+function parseMail(text: string, ok: boolean) {
+  let data: unknown
+  try {
+    data = JSON.parse(text)
+  } catch {
+    throw new Error("empty")
+  }
+  if (!ok) throw new Error("empty")
+  return data
+}
+
+function httpsText(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) {
+  return new Promise<string>((resolve, reject) => {
+    const target = new URL(url)
+    const body = init?.body
+    const req = httpsRequest(
+      {
+        hostname: target.hostname,
+        path: `${target.pathname}${target.search}`,
+        method: init?.method || "GET",
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "Mozilla/5.0 (compatible; Promptie/1.0)",
+          ...(body ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } : {}),
+          ...init?.headers,
         },
-        (res) => {
-          const chunks: Buffer[] = []
-          res.on("data", (chunk: Buffer) => chunks.push(chunk))
-          res.on("end", () => {
-            const text = Buffer.concat(chunks).toString("utf8").trim()
-            if (!text) {
-              reject(new Error("empty"))
-              return
-            }
-            try {
-              resolve(JSON.parse(text))
-            } catch {
-              reject(new Error("empty"))
-            }
-          })
-        },
-      )
-      req.setTimeout(15000, () => {
-        req.destroy()
-        reject(new Error("empty"))
-      })
-      req.on("error", () => reject(new Error("empty")))
-      if (body) req.write(body)
-      req.end()
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (chunk: Buffer) => chunks.push(chunk))
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8").trim()
+          const status = res.statusCode || 0
+          if (!text || status < 200 || status >= 300) {
+            reject(new Error("empty"))
+            return
+          }
+          resolve(text)
+        })
+      },
+    )
+    req.setTimeout(15000, () => {
+      req.destroy()
+      reject(new Error("empty"))
     })
+    req.on("error", () => reject(new Error("empty")))
+    if (body) req.write(body)
+    req.end()
+  })
+}
+
+function mailJson(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) {
+  const read = async () => {
+    const headers = {
+      Accept: "application/json",
+      "User-Agent": "Mozilla/5.0 (compatible; Promptie/1.0)",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    }
+    try {
+      const response = await fetch(url, {
+        method: init?.method || "GET",
+        headers,
+        body: init?.body,
+        cache: "no-store",
+        redirect: "follow",
+      })
+      const text = (await response.text()).trim()
+      if (text) return parseMail(text, response.ok)
+    } catch {
+      /* an empty or blocked response falls through to the raw request */
+    }
+    return parseMail(await httpsText(url, init), true)
+  }
 
   return (async () => {
     let last: unknown = null
@@ -100,37 +134,51 @@ function listed(data: unknown) {
   return []
 }
 
-export async function openTempInbox(): Promise<Inbox> {
-  const domains = await mailJson("https://api.mail.tm/domains").catch(() => null)
-  const domain = listed(domains).find((item) => item && typeof item === "object" && "domain" in item && item.isActive !== false) as
-    | { domain?: string }
-    | undefined
-  if (!domain?.domain) throw new Error("A temporary inbox could not be opened.")
-  const address = `promptie${Math.random().toString(36).slice(2, 8)}@${domain.domain}`
-  const password = `Promptie${Math.random().toString(36).slice(2, 10)}`
-  const account = JSON.stringify({ address, password })
-  const created = await mailJson("https://api.mail.tm/accounts", { method: "POST", body: account }).catch(() => null)
-  if (!created || typeof created !== "object" || !("address" in created)) throw new Error("A temporary inbox could not be opened.")
-  const tokenBody = await mailJson("https://api.mail.tm/token", { method: "POST", body: account }).catch(() => null)
-  const token = tokenBody && typeof tokenBody === "object" && "token" in tokenBody ? String((tokenBody as { token?: string }).token || "") : ""
-  if (!token) throw new Error("A temporary inbox could not be opened.")
-  return { address, token }
+function usableDomain(item: unknown) {
+  if (!item || typeof item !== "object" || !("domain" in item)) return ""
+  const record = item as { domain?: unknown; isActive?: unknown; isVerified?: unknown }
+  if (typeof record.domain !== "string" || !record.domain) return ""
+  if (record.isActive === false || record.isVerified === false) return ""
+  return record.domain
 }
 
-export async function waitForMail(token: string) {
+async function openOn(api: string): Promise<Inbox | null> {
+  const domains = await mailJson(`${api}/domains`).catch(() => null)
+  const domain = listed(domains).map(usableDomain).find(Boolean)
+  if (!domain) return null
+  const address = `promptie${Math.random().toString(36).slice(2, 8)}@${domain}`
+  const password = `Promptie${Math.random().toString(36).slice(2, 10)}`
+  const account = JSON.stringify({ address, password })
+  const created = await mailJson(`${api}/accounts`, { method: "POST", body: account }).catch(() => null)
+  if (!created || typeof created !== "object" || !("address" in created)) return null
+  const tokenBody = await mailJson(`${api}/token`, { method: "POST", body: account }).catch(() => null)
+  const token = tokenBody && typeof tokenBody === "object" && "token" in tokenBody ? String((tokenBody as { token?: string }).token || "") : ""
+  if (!token) return null
+  return { address, token, api }
+}
+
+export async function openTempInbox(): Promise<Inbox> {
+  for (const api of INBOX_APIS) {
+    const inbox = await openOn(api)
+    if (inbox) return inbox
+  }
+  throw new Error("A temporary inbox could not be opened.")
+}
+
+export async function waitForMail(inbox: Inbox) {
   const started = Date.now()
   let messages: MailMessage[] = []
   while (Date.now() - started < 50000) {
-    const data = await mailJson("https://api.mail.tm/messages", {
-      headers: { Authorization: `Bearer ${token}` },
+    const data = await mailJson(`${inbox.api}/messages`, {
+      headers: { Authorization: `Bearer ${inbox.token}` },
     }).catch(() => null)
     const list = listed(data)
     if (list.length) {
       const next: MailMessage[] = []
       for (const item of list) {
         if (!item || typeof item !== "object" || !("id" in item)) continue
-        const full = await mailJson(`https://api.mail.tm/messages/${String(item.id)}`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const full = await mailJson(`${inbox.api}/messages/${String(item.id)}`, {
+          headers: { Authorization: `Bearer ${inbox.token}` },
         }).catch(() => null)
         if (!full || typeof full !== "object") continue
         const record = full as { html?: string | string[]; subject?: string; text?: string }

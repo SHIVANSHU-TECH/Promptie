@@ -277,7 +277,7 @@ export async function runFlowTest(
     checks.push(check("inbox", "Temporary inbox", true, `Checkout used ${buyer.email}.`))
 
     await snap("Reading the inbox")
-    const messages = orderId ? await waitForMail(inbox.token) : []
+    const messages = orderId ? await waitForMail(inbox) : []
     if (orderId) {
       const member = await finishMemberPortal(browser, url, buyer.email, messages, async (label) => {
         await snap(label)
